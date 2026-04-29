@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXO | Piloto Operacional v5.2</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --bg:#0b1220;--panel:#121c2f;--panel2:#0f172a;--border:#263856;
+  --text:#f8fafc;--muted:#93b4d7;--blue:#38bdf8;--green:#22c55e;
+  --red:#ef4444;--yellow:#f59e0b;--purple:#8b5cf6;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text)}
+header{padding:26px 28px;border-bottom:1px solid var(--border);background:#0f172a}
+h1{margin:0;font-size:30px}
+header p{margin:8px 0 0;color:#a8c7e8}
+.badge{float:right;background:#073b5c;color:#d7f3ff;padding:12px 18px;border-radius:999px;font-size:14px}
+nav{display:flex;gap:10px;padding:18px 28px;border-bottom:1px solid var(--border);background:#0b1020;flex-wrap:wrap}
+nav button,.btn{border:1px solid var(--border);background:#111c31;color:#fff;padding:12px 18px;border-radius:12px;cursor:pointer;font-size:15px}
+nav button.active,.btn-primary{background:var(--blue);color:#06111f;font-weight:bold;border-color:var(--blue)}
+.btn-green{background:var(--green);color:#06111f;border:0;font-weight:bold}
+.btn-red{background:var(--red);color:white;border:0;font-weight:bold}
+.btn-edit{background:#2563eb;color:white;border:0;font-weight:bold}
+.btn-yellow{background:var(--yellow);color:#111827;border:0;font-weight:bold}
+main{padding:28px;max-width:1600px;margin:auto}
+.section{display:none}
+.section.active{display:block}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px;margin-bottom:22px;box-shadow:0 12px 30px rgba(0,0,0,.18)}
+.card h2,.card h3{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.grid5{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:22px}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px}
+.kpi span{display:block;color:var(--muted);font-size:13px}
+.kpi strong{display:block;font-size:24px;margin-top:8px}
+label{display:block;color:#9fc1e8;font-size:14px;margin-bottom:6px}
+input,select,textarea{width:100%;background:#0b1220;color:white;border:1px solid var(--border);padding:12px 14px;border-radius:12px;font-size:15px}
+button{transition:.15s}
+button:hover{filter:brightness(1.08)}
+table{width:100%;border-collapse:collapse;overflow:hidden;border-radius:14px}
+th,td{padding:14px;border-bottom:1px solid var(--border);text-align:left}
+th{color:#bfeeff;background:#0b1220}
+tr:hover{background:#142039}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.chart-wrap{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+canvas{background:#0b1220;border:1px solid var(--border);border-radius:16px;padding:12px;min-height:260px;max-height:360px;width:100%!important}
+.insight{background:#0b1220;border-left:4px solid var(--blue);padding:14px;margin:10px 0;border-radius:10px;color:#e5eef9}
+.small{font-size:13px;color:var(--muted)}
+@media(max-width:1100px){.grid,.grid5,.kpis,.chart-wrap{grid-template-columns:1fr 1fr}}
+@media(max-width:700px){.grid,.grid5,.kpis,.chart-wrap{grid-template-columns:1fr}.badge{float:none;display:inline-block;margin-top:12px}}
+
+.login-screen{
+  position:fixed;
+  inset:0;
+  background:linear-gradient(135deg,#08111f,#0f172a);
+  z-index:9999;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:24px;
+}
+.login-box{
+  width:100%;
+  max-width:420px;
+  background:#121c2f;
+  border:1px solid #263856;
+  border-radius:22px;
+  padding:32px;
+  box-shadow:0 24px 70px rgba(0,0,0,.35);
+}
+.login-box h1{
+  margin:0 0 8px;
+  font-size:30px;
+}
+.login-box p{
+  margin:0 0 22px;
+  color:#93b4d7;
+}
+.login-error{
+  color:#fecaca;
+  background:#7f1d1d;
+  border:1px solid #ef4444;
+  padding:10px 12px;
+  border-radius:10px;
+  display:none;
+  margin-top:12px;
+}
+.client-pill{
+  display:inline-block;
+  background:#073b5c;
+  color:#d7f3ff;
+  padding:8px 12px;
+  border-radius:999px;
+  font-size:13px;
+  margin-bottom:16px;
+}
+
+/* Estilos adicionais para Admin */
+.badge-success{background:#22c55e;color:#06111f;padding:4px 8px;border-radius:999px;font-size:12px}
+.badge-danger{background:#ef4444;color:white;padding:4px 8px;border-radius:999px;font-size:12px}
+.badge-primary{background:#38bdf8;color:#06111f;padding:4px 8px;border-radius:999px;font-size:12px}
+.hidden{display:none}
+.admin-only{display:none}
+.admin-only.show{display:block}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="login-screen">
+  <div class="login-box">
+    <div class="client-pill">Acesso Cliente Piloto</div>
+    <h1>NEXO</h1>
+    <p>Diagnóstico de desperdício, CMV e rentabilidade.</p>
+    <div id="loginError" class="login-error"></div>
+    <input type="email" id="loginUser" placeholder="E-mail" autocomplete="email">
+    <input type="password" id="loginPass" placeholder="Senha" autocomplete="current-password">
+    <button class="btn btn-primary" onclick="AuthManager.fazerLogin()" style="width:100%;margin-top:12px;">Entrar</button>
+  </div>
+</div>
+
+<header>
+  <button class="btn btn-red logout-btn" onclick="AuthManager.sair()">Sair</button>
+  <div class="badge">Cliente Piloto • Acesso individual</div>
+  <h1><span id="nomeRestauranteTopo">Restaurante Cliente</span></h1>
+  <p>Gestão inteligente de custos e rentabilidade</p>
+</header>
+
+<nav>
+  <button>Dashboard</button>
+  <button>Cadastro de pratos</button>
+  <button>Vendas</button>
+  <button>Inventário</button>
+  <button>Engenharia</button>
+  <button>Dados / Backup</button>
+  <button class="admin-only" style="display:none;">Admin Master</button>
+</nav>
+
+<main>
+<section id="dashboard" class="section active">
+  <div class="card">
+    <h2>Dashboard</h2>
+    <div class="kpis">
+      <div class="kpi" id="kpi-pratos"><span>Total de Pratos</span><strong>0</strong></div>
+      <div class="kpi" id="kpi-vendas"><span>Total Vendido</span><strong>0</strong></div>
+      <div class="kpi" id="kpi-receita"><span>Receita Total</span><strong>R$0,00</strong></div>
+      <div class="kpi" id="kpi-desperdicio"><span>Desperdício</span><strong>R$0,00</strong></div>
+      <div class="kpi" id="kpi-cmv"><span>CMV</span><strong>R$0,00</strong></div>
+      <div class="kpi" id="kpi-margem"><span>Margem</span><strong>0%</strong></div>
+    </div>
+  </div>
+
+  <div class="chart-wrap">
+    <div class="card">
+      <h3>Desperdício por Item</h3>
+      <canvas id="chartPerda"></canvas>
+    </div>
+    <div class="card">
+      <h3>Insights Automáticos</h3>
+      <div id="insights"></div>
+    </div>
+  </div>
+</section>
+
+<section id="pratos" class="section">
+  <div class="card">
+    <h2>Cadastro de Pratos</h2>
+    <div class="grid">
+      <input type="text" id="pratoNome" placeholder="Nome do prato">
+      <input type="text" id="pratoItem" placeholder="Item principal (ex: file mignon)">
+      <select id="pratoGrupo">
+        <option value="">Selecione o grupo</option>
+        <option value="Alimentos">Alimentos</option>
+        <option value="Bebidas">Bebidas</option>
+        <option value="Sobremesas">Sobremesas</option>
+      </select>
+      <input type="number" id="pratoKg" placeholder="Kg por prato" step="0.001">
+      <input type="number" id="pratoPreco" placeholder="Preço de venda" step="0.01">
+      <input type="number" id="pratoCusto" placeholder="Custo estimado" step="0.01">
+    </div>
+    <div style="margin-top:18px;">
+      <button id="btnSalvarPrato" class="btn btn-primary" onclick="PratosManager.salvarPrato()">Adicionar</button>
+      <button id="btnCancelarPrato" class="btn" onclick="PratosManager.cancelarEdicaoPrato()" style="display:none;">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Pratos Cadastrados</h3>
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>Item</th><th>Grupo</th><th>Kg/prato</th><th>Preço</th><th>Custo</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="pratosTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="vendas" class="section">
+  <div class="card">
+    <h2>Registro de Vendas</h2>
+    <div class="grid">
+      <select id="vendaPrato">
+        <option value="">Selecione um prato</option>
+      </select>
+      <input type="number" id="vendaQuantidade" placeholder="Quantidade vendida" step="1">
+      <select id="vendaModo">
+        <option value="diario">Diário</option>
+        <option value="consolidado">Consolidado</option>
+      </select>
+      <input type="date" id="vendaDataInicio">
+      <input type="date" id="vendaDataFim">
+    </div>
+    <div style="margin-top:18px;">
+      <button id="btnSalvarVenda" class="btn btn-primary" onclick="VendasManager.salvarVenda()">Adicionar</button>
+      <button id="btnCancelarVenda" class="btn" onclick="VendasManager.cancelarEdicaoVenda()" style="display:none;">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vendas Registradas</h3>
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Prato</th><th>Modo</th><th>Quantidade</th><th>Receita</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="vendasTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="inventario" class="section">
+  <div class="card">
+    <h2>Controle de Inventário</h2>
+    <div class="grid">
+      <input type="date" id="invDataInicio">
+      <input type="date" id="invDataFim">
+      <input type="text" id="invItem" placeholder="Item/Proteína">
+      <input type="number" id="invInicial" placeholder="Estoque inicial (kg)" step="0.001">
+      <input type="number" id="invCompras" placeholder="Compras (kg)" step="0.001">
+      <input type="number" id="invFinal" placeholder="Estoque final (kg)" step="0.001">
+      <input type="number" id="invCusto" placeholder="Custo/kg" step="0.01">
+    </div>
+    <div style="margin-top:18px;">
+      <button id="btnSalvarInv" class="btn btn-primary" onclick="InventarioManager.salvarInventario()">Adicionar</button>
+      <button id="btnCancelarInv" class="btn" onclick="InventarioManager.cancelarEdicaoInventario()" style="display:none;">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Inventário Registrado</h3>
+    <table>
+      <thead>
+        <tr><th>Data Início</th><th>Data Fim</th><th>Item</th><th>Inicial</th><th>Compras</th><th>Final</th><th>Custo/kg</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="invTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="engenharia" class="section">
+  <div class="card">
+    <h2>Engenharia de Cardápio</h2>
+    <p>Análise de rentabilidade por prato e sugestões de otimização.</p>
+    <div id="engenhariaContent">
+      <p>Funcionalidade em desenvolvimento...</p>
+    </div>
+  </div>
+</section>
+
+<section id="dados" class="section">
+  <div class="card">
+    <h2>Dados / Backup</h2>
+    <p class="small">Use exportar/importar para transferir a base entre computadores ou restaurantes.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('fileImport').click()">Importar base</button>
+    <button class="btn btn-green" onclick="exportarBase()">Exportar backup</button>
+    <button class="btn btn-yellow" onclick="carregarModelo()">Carregar modelo inicial</button>
+    <button class="btn btn-red" onclick="resetarTudo()">Resetar sistema</button>
+    <input type="file" id="fileImport" accept=".json" style="display:none" onchange="importarBase(event)">
+  </div>
+</section>
+
+<!-- Painel Admin Master -->
+<section id="admin" class="section">
+  <div class="card">
+    <h2>Painel Admin Master</h2>
+    <div class="kpis">
+      <div class="kpi" id="admin-kpi-restaurantes"><span>Total de Restaurantes</span><strong>0</strong></div>
+      <div class="kpi" id="admin-kpi-usuarios"><span>Total de Usuários</span><strong>0</strong></div>
+      <div class="kpi" id="admin-kpi-admins"><span>Admins Master</span><strong>0</strong></div>
+      <div class="kpi" id="admin-kpi-clientes"><span>Clientes</span><strong>0</strong></div>
+      <div class="kpi" id="admin-kpi-ativos"><span>Restaurantes Ativos</span><strong>0</strong></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Gestão de Restaurantes</h3>
+    <div class="grid">
+      <input type="text" id="restauranteNome" placeholder="Nome do restaurante">
+      <input type="email" id="restauranteEmail" placeholder="E-mail do restaurante">
+      <input type="tel" id="restauranteTelefone" placeholder="Telefone">
+      <input type="text" id="restauranteEndereco" placeholder="Endereço">
+    </div>
+    <div style="margin-top:18px;">
+      <button id="btnSalvarRestaurante" class="btn btn-primary" onclick="AdminManager.salvarRestaurante()">Adicionar</button>
+      <button id="btnCancelarRestaurante" class="btn" onclick="AdminManager.cancelarEdicaoRestaurante()" style="display:none;">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Restaurantes Cadastrados</h3>
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>E-mail</th><th>Telefone</th><th>Status</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="restaurantesTableBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Gestão de Usuários</h3>
+    <div class="grid">
+      <input type="email" id="usuarioEmail" placeholder="E-mail do usuário">
+      <input type="text" id="usuarioNome" placeholder="Nome do usuário">
+      <select id="usuarioTipo">
+        <option value="">Selecione o tipo</option>
+        <option value="admin_master">Admin Master</option>
+        <option value="cliente">Cliente</option>
+      </select>
+      <div id="usuarioRestauranteField" style="display:none;">
+        <select id="usuarioRestaurante">
+          <option value="">Selecione um restaurante</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:18px;">
+      <button id="btnSalvarUsuario" class="btn btn-primary" onclick="AdminManager.salvarUsuario()">Adicionar</button>
+      <button id="btnCancelarUsuario" class="btn" onclick="AdminManager.cancelarEdicaoUsuario()" style="display:none;">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Usuários Cadastrados</h3>
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>E-mail</th><th>Tipo</th><th>Restaurante</th><th>Ações</th></tr>
+      </thead>
+      <tbody id="usuariosTableBody"></tbody>
+    </table>
+  </div>
+</section>
+
+</main>
+
+<!-- Scripts dos módulos -->
+<script src="js/supabase.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/pratos.js"></script>
+<script src="js/vendas.js"></script>
+<script src="js/inventario.js"></script>
+<script src="js/data.js"></script>
+
+<script>
+// Inicialização do sistema
+document.addEventListener('DOMContentLoaded', async function(){
+  // Inicializa Supabase
+  SupabaseManager.initSupabase();
+  
+  // Inicializa UI
+  UIManager.inicializarAbas();
+  UIManager.inicializarLogin();
+  
+  // Verifica sessão e permissões
+  await AuthManager.verificarSessao();
+  
+  // Verifica se é admin master
+  const isAdmin = await AdminManager.verificarAdminMaster();
+  if (isAdmin) {
+    // Mostra aba admin
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = 'block';
+    });
+    
+    // Inicializa painel admin
+    await AdminManager.inicializarAdmin();
+  }
+});
+
+// Event listener para mudança no tipo de usuário
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'usuarioTipo') {
+    AdminManager.toggleRestauranteField();
+  }
+});
+
+// Funções globais para compatibilidade com elementos HTML
+function exportarBase() {
+  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
+  const vendas = window.VendasManager ? window.VendasManager.getVendas() : [];
+  const inventario = window.InventarioManager ? window.InventarioManager.getInventario() : [];
+  
+  const blob = new Blob([JSON.stringify({pratos, vendas, inventario}, null, 2)], {type: 'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'backup_nexo_' + (SupabaseManager.getRestauranteId() || 'restaurante') + '.json';
+  a.click();
+}
+
+function importarBase(e) {
+  const f = e.target.files[0]; if(!f)return;
+  const reader = new FileReader();
+  reader.onload = async function(ev){
+    try{
+      if(!SupabaseManager.getRestauranteId()){alert('Faça login novamente. Restaurante não identificado.');return}
+      const d=JSON.parse(ev.target.result);
+      const supabase = SupabaseManager.getSupabaseClient();
+      const restauranteId = SupabaseManager.getRestauranteId();
+      const pratosImport=(d.pratos||[]).map(({id,created_at,...x})=>{const nome=x.nome||x.nome_prato||''; return {...x,nome,nome_prato:nome,restaurante_id:restauranteId};});
+      const vendasImport=(d.vendas||[]).map(({id,created_at,dataInicio,dataFim,...x})=>({...x,restaurante_id:restauranteId,data_inicio:x.data_inicio||dataInicio||x.data,data_fim:x.data_fim||dataFim||dataInicio||x.data}));
+      const invImport=(d.inventario||[]).map(({id,created_at,dataInicio,dataFim,custoKg,...x})=>({...x,restaurante_id:restauranteId,data_inicio:x.data_inicio||dataInicio,data_fim:x.data_fim||dataFim,custo_kg:x.custo_kg ?? custoKg}));
+      if(pratosImport.length){const {error}=await supabase.from('pratos').insert(pratosImport); if(error) throw error}
+      if(vendasImport.length){const {error}=await supabase.from('vendas').insert(vendasImport); if(error) throw error}
+      if(invImport.length){const {error}=await supabase.from('inventario').insert(invImport); if(error) throw error}
+      await DataManager.carregarTodosDados();
+      alert('Base importada com sucesso.');
+    }catch(err){console.error(err);alert('Arquivo inválido ou erro ao importar: '+err.message)}
+  };
+  reader.readAsText(f);
+}
+
+async function carregarModelo(){
+  if(!SupabaseManager.getRestauranteId()){alert('Faça login novamente. Restaurante não identificado.');return}
+  if(!confirm('Carregar dados modelo para teste?')) return;
+  const hojeStr = new Date().toISOString().slice(0,10);
+  const restauranteId = SupabaseManager.getRestauranteId();
+  const pratosModelo=[{restaurante_id:restauranteId,nome:'Mignon de Sol',nome_prato:'Mignon de Sol',grupo:'Alimentos',item:'file mignon',kg:.240,preco:99,custo:0},{restaurante_id:restauranteId,nome:'Rigatoni da Terra',nome_prato:'Rigatoni da Terra',grupo:'Alimentos',item:'file mignon',kg:.120,preco:69,custo:0},{restaurante_id:restauranteId,nome:'Picadinho',nome_prato:'Picadinho',grupo:'Alimentos',item:'file mignon',kg:.220,preco:92,custo:0}];
+  const vendasModelo=[{restaurante_id:restauranteId,modo:'diario',data_inicio:hojeStr,data_fim:hojeStr,data:hojeStr,prato:'Mignon de Sol',quantidade:35,receita:3465},{restaurante_id:restauranteId,modo:'diario',data_inicio:hojeStr,data_fim:hojeStr,data:hojeStr,prato:'Rigatoni da Terra',quantidade:44,receita:3036},{restaurante_id:restauranteId,modo:'diario',data_inicio:hojeStr,data_fim:hojeStr,data:hojeStr,prato:'Picadinho',quantidade:28,receita:2576}];
+  const invModelo=[{restaurante_id:restauranteId,data_inicio:hojeStr,data_fim:hojeStr,mes:hojeStr.slice(0,7),item:'file mignon',inicial:18,compras:12,final:9,custo_kg:89}];
+  const supabase = SupabaseManager.getSupabaseClient();
+  const r1=await supabase.from('pratos').insert(pratosModelo); if(r1.error){alert(r1.error.message);return}
+  const r2=await supabase.from('vendas').insert(vendasModelo); if(r2.error){alert(r2.error.message);return}
+  const r3=await supabase.from('inventario').insert(invModelo); if(r3.error){alert(r3.error.message);return}
+  await DataManager.carregarTodosDados();
+}
+
+async function resetarTudo(){
+  if(!confirm('Apagar TODOS os dados deste restaurante no Supabase?')) return;
+  if(!SupabaseManager.getRestauranteId()){alert('Faça login novamente. Restaurante não identificado.');return}
+  const supabase = SupabaseManager.getSupabaseClient();
+  const restauranteId = SupabaseManager.getRestauranteId();
+  for(const tabela of ['vendas','inventario','pratos']){
+    const {error}=await supabase.from(tabela).delete().eq('restaurante_id',restauranteId);
+    if(error){console.error(error); alert('Erro ao resetar '+tabela+': '+error.message); return}
+  }
+  DataManager.limparTodosDados();
+  renderAll();
+  alert('Todos os dados foram apagados.');
+}
+
+function gerarRelatorio(){
+  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
+  const vendas = window.VendasManager ? window.VendasManager.getVendas() : [];
+  const inventario = window.InventarioManager ? window.InventarioManager.getInventario() : [];
+  
+  const metricas = window.DashboardManager ? window.DashboardManager.calcularMetricas(pratos, vendas, inventario) : {};
+  const insights = window.DashboardManager ? window.DashboardManager.gerarInsights(metricas, pratos, vendas, inventario) : [];
+  
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const totalPratos = pratos.length;
+  const totalVendas = vendas.reduce((s, v) => s + (v.quantidade || 0), 0);
+  const totalReceita = vendas.reduce((s, v) => s + (v.receita || 0), 0);
+  const desperdicio = metricas.desperdicio || 0;
+  const cmv = metricas.cmv || 0;
+  const margem = metricas.margem || 0;
+  
+  const linhas = vendas.map(v => `<tr><td>${v.data || ''}</td><td>${v.prato || ''}</td><td>${v.modo || ''}</td><td>${v.quantidade || ''}</td><td>${UIManager.BRL(v.receita || 0)}</td></tr>`).join('');
+  const insightsTexto = insights.map(i => `<li>${i}</li>`).join('');
+  
+  const htmlRelatorio = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Relatório NEXO</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:32px}
+        h1{margin-bottom:4px}
+        .sub{color:#4b5563;margin-bottom:24px}
+        .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:20px 0}
+        .kpi{border:1px solid #d1d5db;border-radius:12px;padding:14px;background:#f9fafb}
+        .kpi span{display:block;color:#6b7280;font-size:12px}
+        .kpi strong{font-size:22px}
+        table{width:100%;border-collapse:collapse;margin-top:16px}
+        th,td{border-bottom:1px solid #d1d5db;padding:10px;text-align:left;font-size:13px}
+        th{background:#f3f4f6}
+        .section{margin-top:28px}
+        .footer{margin-top:36px;color:#6b7280;font-size:12px}
+      </style>
+    </head>
+    <body>
+      <h1>Relatório NEXO</h1>
+      <p class="sub">Gerado em ${hoje}</p>
+      
+      <div class="section">
+        <h2>Métricas Principais</h2>
+        <div class="kpis">
+          <div class="kpi"><span>Total de Pratos</span><strong>${totalPratos}</strong></div>
+          <div class="kpi"><span>Total Vendido</span><strong>${totalVendas}</strong></div>
+          <div class="kpi"><span>Receita Total</span><strong>${UIManager.BRL(totalReceita)}</strong></div>
+          <div class="kpi"><span>Desperdício</span><strong>${UIManager.BRL(desperdicio)}</strong></div>
+          <div class="kpi"><span>CMV</span><strong>${UIManager.BRL(cmv)}</strong></div>
+          <div class="kpi"><span>Margem</span><strong>${margem.toFixed(1)}%</strong></div>
+        </div>
+      </div>
+      
+      <div class="section">
+        <h2>Insights</h2>
+        <ul>${insightsTexto || '<li>Sem insights disponíveis.</li>'}</ul>
+      </div>
+      
+      <div class="section">
+        <h2>Vendas</h2>
+        <table>
+          <thead><tr><th>Data</th><th>Prato</th><th>Modo</th><th>Quantidade</th><th>Receita</th></tr></thead>
+          <tbody>${linhas || '<tr><td colspan="5">Sem dados para o filtro selecionado.</td></tr>'}</tbody>
+        </table>
+      </div>
+      
+      <div class="footer">Relatório gerado automaticamente pelo NEXO.</div>
+      <script>window.onload=function(){window.print()};<\/script>
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank');
+  janela.document.open();
+  janela.document.write(htmlRelatorio);
+  janela.document.close();
+}
+
+// Mantém compatibilidade com renderAll global
+window.renderAll = function() {
+  if (window.DashboardManager) window.DashboardManager.renderizarDashboard();
+  if (window.PratosManager) window.PratosManager.renderizarPratos();
+  if (window.VendasManager) window.VendasManager.renderizarVendas();
+  if (window.InventarioManager) window.InventarioManager.renderizarInventario();
+};
+
+</script>
+</body>
+</html>
