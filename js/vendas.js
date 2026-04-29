@@ -115,8 +115,8 @@ function editarVenda(index) {
     }
   }
   
-  document.getElementById('btnSalvarVenda').textContent = 'Atualizar';
-  document.getElementById('btnCancelarVenda').style.display = 'inline-block';
+  const btnSalvarVenda = document.getElementById('btnSalvarVenda'); if (btnSalvarVenda) btnSalvarVenda.textContent = 'Atualizar';
+  const btnCancelarVenda = document.getElementById('btnCancelarVenda'); if (btnCancelarVenda) btnCancelarVenda.style.display = 'inline-block';
 }
 
 // Cancela edição de venda
@@ -132,8 +132,8 @@ function cancelarEdicaoVenda() {
     pratoSelect.selectedIndex = 0;
   }
   
-  document.getElementById('btnSalvarVenda').textContent = 'Adicionar';
-  document.getElementById('btnCancelarVenda').style.display = 'none';
+  const btnSalvarVenda = document.getElementById('btnSalvarVenda'); if (btnSalvarVenda) btnSalvarVenda.textContent = 'Salvar venda';
+  const btnCancelarVenda = document.getElementById('btnCancelarVenda'); if (btnCancelarVenda) btnCancelarVenda.style.display = 'none';
 }
 
 // Exclui venda

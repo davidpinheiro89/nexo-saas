@@ -100,8 +100,8 @@ function editarInventario(index) {
   invFinal.value = it.final || '';
   invCusto.value = it.custo_kg || '';
   
-  document.getElementById('btnSalvarInv').textContent = 'Atualizar';
-  document.getElementById('btnCancelarInv').style.display = 'inline-block';
+  const btnSalvarInv = document.getElementById('btnSalvarInv'); if (btnSalvarInv) btnSalvarInv.textContent = 'Atualizar';
+  const btnCancelarInv = document.getElementById('btnCancelarInv'); if (btnCancelarInv) btnCancelarInv.style.display = 'inline-block';
 }
 
 // Cancela edição de inventário
@@ -115,8 +115,8 @@ function cancelarEdicaoInventario() {
   invFinal.value = '';
   invCusto.value = '';
   
-  document.getElementById('btnSalvarInv').textContent = 'Adicionar';
-  document.getElementById('btnCancelarInv').style.display = 'none';
+  const btnSalvarInv = document.getElementById('btnSalvarInv'); if (btnSalvarInv) btnSalvarInv.textContent = 'Salvar inventário';
+  const btnCancelarInv = document.getElementById('btnCancelarInv'); if (btnCancelarInv) btnCancelarInv.style.display = 'none';
 }
 
 // Exclui item do inventário

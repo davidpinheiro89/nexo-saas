@@ -87,8 +87,8 @@ function editarPrato(index) {
   pratoPreco.value = p.preco || '';
   pratoCusto.value = p.custo || '';
   
-  document.getElementById('btnSalvarPrato').textContent = 'Atualizar';
-  document.getElementById('btnCancelarPrato').style.display = 'inline-block';
+  const btnSalvarPrato = document.getElementById('btnSalvarPrato'); if (btnSalvarPrato) btnSalvarPrato.textContent = 'Atualizar';
+  const btnCancelarPrato = document.getElementById('btnCancelarPrato'); if (btnCancelarPrato) btnCancelarPrato.style.display = 'inline-block';
 }
 
 // Cancela edição de prato
@@ -101,8 +101,8 @@ function cancelarEdicaoPrato() {
   pratoPreco.value = '';
   pratoCusto.value = '';
   
-  document.getElementById('btnSalvarPrato').textContent = 'Adicionar';
-  document.getElementById('btnCancelarPrato').style.display = 'none';
+  const btnSalvarPrato = document.getElementById('btnSalvarPrato'); if (btnSalvarPrato) btnSalvarPrato.textContent = 'Salvar prato';
+  const btnCancelarPrato = document.getElementById('btnCancelarPrato'); if (btnCancelarPrato) btnCancelarPrato.style.display = 'none';
 }
 
 // Exclui prato
