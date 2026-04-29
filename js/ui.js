@@ -1,28 +1,91 @@
 // Módulo de UI e utilitários do NEXO
+const CLIENTE_NEXO = {
+  restaurante: 'Restaurante Cliente',
+  usuario: 'Usuário'
+};
 
-// Formata valor em BRL
-function BRL(val) {
-  return new Intl.NumberFormat('pt-BR', {style: 'currency', currency: 'BRL'}).format(val || 0);
+// Formatação de valores
+const BRL = v => (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const NUM = v => Number(String(v ?? 0).replace(',', '.')) || 0;
+
+// Funções de texto
+const texto = v => String(v || '').trim();
+const normalizarItem = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
+// Aplica datas padrão nos formulários
+function aplicarDatasPadrao() {
+  const hoje = new Date();
+  const hojeStr = hoje.toISOString().slice(0, 10);
+  
+  if (document.getElementById('vendaDataInicio') && !vendaDataInicio.value) {
+    vendaDataInicio.value = hojeStr;
+  }
+  if (document.getElementById('vendaDataFim') && !vendaDataFim.value) {
+    vendaDataFim.value = hojeStr;
+  }
+  if (document.getElementById('invDataInicio') && !invDataInicio.value) {
+    invDataInicio.value = hojeStr;
+  }
+  if (document.getElementById('invDataFim') && !invDataFim.value) {
+    invDataFim.value = hojeStr;
+  }
 }
 
-// Converte string para número
-function NUM(str) {
-  const clean = String(str || '').replace(/[^\d.-]/g, '');
-  return clean ? parseFloat(clean) : 0;
+// Atualiza informações do cliente na UI
+function atualizarInfoCliente(dados) {
+  CLIENTE_NEXO.restaurante = dados.restaurante;
+  CLIENTE_NEXO.usuario = dados.usuario;
+  
+  const nomeRestauranteTopo = document.getElementById('nomeRestauranteTopo');
+  if (nomeRestauranteTopo) {
+    nomeRestauranteTopo.textContent = CLIENTE_NEXO.restaurante;
+  }
 }
 
-// Normaliza nome de item/proteína
-function normalizarItem(nome) {
-  return String(nome || '').trim().toLowerCase();
+// Aplica informações do cliente nos elementos
+function aplicarCliente() {
+  const nomeRestauranteTopo = document.getElementById('nomeRestauranteTopo');
+  if (nomeRestauranteTopo) {
+    nomeRestauranteTopo.textContent = CLIENTE_NEXO.restaurante;
+  }
 }
 
-// Formata data para padrão brasileiro
-function formatarData(data) {
-  if (!data) return '';
-  return new Date(data).toLocaleDateString('pt-BR');
+// Sistema de abas
+function showTab(id, btn) {
+  try {
+    document.querySelectorAll('main .section').forEach(function(sec) {
+      sec.classList.remove('active');
+      sec.style.display = 'none';
+    });
+
+    const alvo = document.getElementById(id);
+    if (alvo) {
+      alvo.classList.add('active');
+      alvo.style.display = 'block';
+    }
+
+    document.querySelectorAll('nav button').forEach(function(b) {
+      b.classList.remove('active');
+    });
+
+    if (btn) {
+      btn.classList.add('active');
+    } else {
+      const botao = document.querySelector('nav button[data-tab="' + id + '"]');
+      if (botao) botao.classList.add('active');
+    }
+
+    // Renderiza dados da aba se existir
+    if (typeof renderAll === 'function') {
+      try { renderAll(); } catch (e) { console.warn('renderAll não impediu troca de aba:', e); }
+    }
+  } catch (e) {
+    console.error('Erro ao trocar aba:', e);
+    alert('Erro ao abrir a aba. Veja o console para detalhes.');
+  }
 }
 
-// Inicializa abas de navegação
+// Inicializa abas
 function inicializarAbas() {
   const mapa = [
     ['dashboard', 'Dashboard'],
@@ -30,91 +93,59 @@ function inicializarAbas() {
     ['vendas', 'Vendas'],
     ['inventario', 'Inventário'],
     ['engenharia', 'Engenharia'],
-    ['dados', 'Dados / Backup'],
-    ['admin', 'Admin Master']
+    ['dados', 'Dados / Backup']
   ];
 
-  document.querySelectorAll('nav button').forEach(function(btn){
+  document.querySelectorAll('nav button').forEach(function(btn) {
     const texto = (btn.textContent || '').trim();
-    mapa.forEach(function(item){
-      if(texto === item[1]){
+    mapa.forEach(function(item) {
+      if (texto === item[1]) {
         btn.setAttribute('data-tab', item[0]);
-        btn.onclick = function(){ window.showTab(item[0], btn); };
+        btn.onclick = function() { showTab(item[0], btn); };
       }
     });
   });
 
   // Garante que a aba dashboard fique ativa ao carregar
   const ativa = document.querySelector('main .section.active');
-  if(!ativa){
-    window.showTab('dashboard', document.querySelector('nav button[data-tab="dashboard"]'));
+  if (!ativa) {
+    showTab('dashboard', document.querySelector('nav button[data-tab="dashboard"]'));
   } else {
-    document.querySelectorAll('main .section').forEach(function(sec){
+    document.querySelectorAll('main .section').forEach(function(sec) {
       sec.style.display = sec.classList.contains('active') ? 'block' : 'none';
     });
   }
 }
 
-// Inicializa eventos de login
+// Inicializa eventos do login
 function inicializarLogin() {
   const user = document.getElementById('loginUser');
   const pass = document.getElementById('loginPass');
-  [user, pass].forEach(function(el){
-    if(el){el.addEventListener('keydown', function(e){if(e.key === 'Enter') AuthManager.fazerLogin();});}
+  
+  [user, pass].forEach(function(el) {
+    if (el) {
+      el.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          if (window.AuthManager) {
+            AuthManager.fazerLogin();
+          }
+        }
+      });
+    }
   });
 }
 
-// Define datas padrão para formulários
-function aplicarDatasPadrao() {
-  const hoje = new Date().toISOString().slice(0,10);
-  const camposData = ['vendaDataInicio', 'vendaDataFim', 'invDataInicio', 'invDataFim'];
-  camposData.forEach(id => {
-    const campo = document.getElementById(id);
-    if(campo && !campo.value) campo.value = hoje;
-  });
-}
-
-// Mostra/oculta abas
-window.showTab = function(id, btn){
-  try{
-    document.querySelectorAll('main .section').forEach(function(sec){
-      sec.classList.remove('active');
-      sec.style.display = 'none';
-    });
-
-    const alvo = document.getElementById(id);
-    if(alvo){
-      alvo.classList.add('active');
-      alvo.style.display = 'block';
-    }
-
-    document.querySelectorAll('nav button').forEach(function(b){
-      b.classList.remove('active');
-    });
-
-    if(btn){
-      btn.classList.add('active');
-    } else {
-      const botao = document.querySelector('nav button[data-tab="' + id + '"]');
-      if(botao) botao.classList.add('active');
-    }
-
-    if(typeof renderAll === 'function'){
-      try { renderAll(); } catch(e){ console.warn('renderAll não impediu troca de aba:', e); }
-    }
-  }catch(e){
-    console.error('Erro ao trocar aba:', e);
-    alert('Erro ao abrir a aba. Veja o console para detalhes.');
-  }
-};
-
-// Exporta funções para uso global
+// Exporta funções e objetos para uso global
 window.UIManager = {
   BRL,
   NUM,
+  texto,
   normalizarItem,
-  formatarData,
+  aplicarDatasPadrao,
+  atualizarInfoCliente,
+  aplicarCliente,
+  showTab,
   inicializarAbas,
   inicializarLogin,
-  aplicarDatasPadrao
+  CLIENTE_NEXO
 };

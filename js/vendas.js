@@ -21,7 +21,7 @@ async function carregarVendas() {
     .from('vendas')
     .select('*')
     .eq('restaurante_id', restauranteId)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: true });
 
   if (error) {
     console.error('Erro ao carregar vendas:', error);
@@ -31,7 +31,7 @@ async function carregarVendas() {
   vendas = data || [];
 }
 
-// Salva venda (novo ou edição)
+// Salva venda (nova ou edição)
 async function salvarVenda() {
   const supabase = SupabaseManager.getSupabaseClient();
   const restauranteId = SupabaseManager.getRestauranteId();
@@ -41,43 +41,49 @@ async function salvarVenda() {
     return;
   }
 
-  const prato = document.getElementById('vendaPrato')?.value;
-  const quantidade = UIManager.NUM(document.getElementById('vendaQuantidade')?.value);
-  const modo = document.getElementById('vendaModo')?.value;
-  const dataInicio = document.getElementById('vendaDataInicio')?.value;
-  const dataFim = document.getElementById('vendaDataFim')?.value;
+  const modo = vendaModo.value;
+  const dataInicio = vendaDataInicio.value;
+  const dataFim = modo === 'consolidado' ? vendaDataFim.value : vendaDataInicio.value;
   
-  if (!prato || !quantidade || !modo || !dataInicio) {
-    alert('Preencha todos os campos obrigatórios.');
+  if (!dataInicio || !dataFim) {
+    alert('Informe a data inicial e final.');
+    return;
+  }
+  
+  if (dataFim < dataInicio) {
+    alert('A data final não pode ser menor que a data inicial.');
     return;
   }
 
-  // Busca dados do prato para calcular receita
-  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
-  const dadosPrato = pratos.find(p => (p.nome || p.nome_prato) === prato);
+  // Obtém prato selecionado
+  const pratoSelect = document.getElementById('vendaPrato');
+  const pratoOption = pratoSelect.options[pratoSelect.selectedIndex];
+  const p = {
+    nome: pratoOption.text,
+    preco: UIManager.NUM(pratoOption.dataset.preco) || 0
+  };
   
-  if (!dadosPrato) {
-    alert('Prato não encontrado. Verifique o cadastro.');
+  const q = UIManager.NUM(vendaQuantidade.value);
+  if (!q || q <= 0) {
+    alert('Informe uma quantidade válida.');
     return;
   }
 
-  const receita = dadosPrato.preco * quantidade;
-  
-  const venda = {
+  const v = {
     restaurante_id: restauranteId,
-    prato,
-    quantidade,
     modo,
     data_inicio: dataInicio,
-    data_fim: modo === 'consolidado' && dataFim ? dataFim : dataInicio,
+    data_fim: dataFim,
     data: dataInicio,
-    receita
+    prato: p.nome,
+    quantidade: q,
+    receita: q * p.preco
   };
 
   const atual = editVenda !== null ? vendas[editVenda] : null;
   const res = atual && atual.id 
-    ? await supabase.from('vendas').update(venda).eq('id', atual.id)
-    : await supabase.from('vendas').insert(venda);
+    ? await supabase.from('vendas').update(v).eq('id', atual.id)
+    : await supabase.from('vendas').insert(v);
 
   if (res.error) {
     console.error(res.error);
@@ -95,11 +101,19 @@ function editarVenda(index) {
   editVenda = index;
   const v = vendas[index];
   
-  document.getElementById('vendaPrato').value = v.prato || '';
-  document.getElementById('vendaQuantidade').value = v.quantidade || '';
-  document.getElementById('vendaModo').value = v.modo || '';
-  document.getElementById('vendaDataInicio').value = v.data_inicio || v.data || '';
-  document.getElementById('vendaDataFim').value = v.data_fim || v.data_inicio || '';
+  vendaModo.value = v.modo || 'diario';
+  vendaDataInicio.value = v.data_inicio || '';
+  vendaDataFim.value = v.data_fim || '';
+  vendaQuantidade.value = v.quantidade || '';
+  
+  // Seleciona o prato
+  const pratoSelect = document.getElementById('vendaPrato');
+  for (let i = 0; i < pratoSelect.options.length; i++) {
+    if (pratoSelect.options[i].text === v.prato) {
+      pratoSelect.selectedIndex = i;
+      break;
+    }
+  }
   
   document.getElementById('btnSalvarVenda').textContent = 'Atualizar';
   document.getElementById('btnCancelarVenda').style.display = 'inline-block';
@@ -108,11 +122,15 @@ function editarVenda(index) {
 // Cancela edição de venda
 function cancelarEdicaoVenda() {
   editVenda = null;
-  document.getElementById('vendaPrato').value = '';
-  document.getElementById('vendaQuantidade').value = '';
-  document.getElementById('vendaModo').value = '';
-  document.getElementById('vendaDataInicio').value = '';
-  document.getElementById('vendaDataFim').value = '';
+  vendaModo.value = 'diario';
+  vendaDataInicio.value = '';
+  vendaDataFim.value = '';
+  vendaQuantidade.value = '';
+  
+  const pratoSelect = document.getElementById('vendaPrato');
+  if (pratoSelect.options.length > 0) {
+    pratoSelect.selectedIndex = 0;
+  }
   
   document.getElementById('btnSalvarVenda').textContent = 'Adicionar';
   document.getElementById('btnCancelarVenda').style.display = 'none';
@@ -138,67 +156,37 @@ async function excluirVenda(index) {
   renderizarVendas();
 }
 
+// Atualiza select de pratos
+function atualizarSelectPratos() {
+  const pratoSelect = document.getElementById('vendaPrato');
+  if (!pratoSelect) return;
+  
+  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
+  
+  pratoSelect.innerHTML = '<option value="">Selecione um prato</option>' +
+    pratos.map(p => `<option value="${p.id}" data-preco="${p.preco}">${p.nome}</option>`).join('');
+}
+
 // Renderiza tabela de vendas
 function renderizarVendas() {
   const tbody = document.getElementById('vendasTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = vendas.map((v, i) => {
-    const data = v.data_inicio || v.data || '';
-    const periodo = v.modo === 'consolidado' && v.data_fim && v.data_fim !== v.data_inicio 
-      ? `${v.data_inicio} a ${v.data_fim}` 
-      : data;
-    
-    return `
-      <tr>
-        <td>${periodo}</td>
-        <td>${v.prato}</td>
-        <td>${v.modo}</td>
-        <td>${v.quantidade}</td>
-        <td>${UIManager.BRL(v.receita || 0)}</td>
-        <td>
-          <div class="actions">
-            <button class="btn-edit" onclick="VendasManager.editarVenda(${i})">Editar</button>
-            <button class="btn-red" onclick="VendasManager.excluirVenda(${i})">Excluir</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
-
-// Atualiza select de pratos no formulário de vendas
-function atualizarSelectPratos() {
-  const select = document.getElementById('vendaPrato');
-  if (!select) return;
-
-  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
-  select.innerHTML = '<option value="">Selecione um prato</option>' + 
-    pratos.map(p => `<option value="${p.nome}">${p.nome}</option>`).join('');
-}
-
-// Atualiza preview de receita
-function atualizarPreviewReceita() {
-  const prato = document.getElementById('vendaPrato')?.value;
-  const quantidade = UIManager.NUM(document.getElementById('vendaQuantidade')?.value);
-  
-  const previewEl = document.getElementById('vendaReceitaPreview');
-  if (!previewEl) return;
-  
-  if (!prato || !quantidade) {
-    previewEl.value = UIManager.BRL(0);
-    return;
-  }
-  
-  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
-  const dadosPrato = pratos.find(p => (p.nome || p.nome_prato) === prato);
-  
-  if (dadosPrato) {
-    const receita = dadosPrato.preco * quantidade;
-    previewEl.value = UIManager.BRL(receita);
-  } else {
-    previewEl.value = UIManager.BRL(0);
-  }
+  tbody.innerHTML = vendas.map((v, i) => `
+    <tr>
+      <td>${v.data || ''}</td>
+      <td>${v.prato || ''}</td>
+      <td>${v.modo || ''}</td>
+      <td>${v.quantidade || ''}</td>
+      <td>${UIManager.BRL(v.receita)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn-edit" onclick="VendasManager.editarVenda(${i})">Editar</button>
+          <button class="btn-red" onclick="VendasManager.excluirVenda(${i})">Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
 // Limpa dados do módulo
@@ -215,8 +203,7 @@ window.VendasManager = {
   editarVenda,
   cancelarEdicaoVenda,
   excluirVenda,
-  renderizarVendas,
   atualizarSelectPratos,
-  atualizarPreviewReceita,
+  renderizarVendas,
   limparDados
 };

@@ -3,174 +3,150 @@ let chartPerda = null;
 
 // Calcula métricas do dashboard
 function calcularMetricas(pratos, vendas, inventario) {
-  const totalReceita = vendas.reduce((s, v) => s + (v.receita || 0), 0);
-  const totalVendido = vendas.reduce((s, v) => s + (v.quantidade || 0), 0);
+  const totalPratos = pratos.length;
+  const totalVendas = vendas.reduce((sum, v) => sum + (v.quantidade || 0), 0);
+  const totalReceita = vendas.reduce((sum, v) => sum + (v.receita || 0), 0);
   
   // Calcula desperdício
-  let desperdicio = 0;
-  const mapaConsumo = {};
+  const desperdicio = calcularDesperdicio(pratos, vendas, inventario);
   
-  // Calcula consumo teórico por item
-  vendas.forEach(v => {
-    const prato = pratos.find(p => (p.nome || p.nome_prato) === v.prato);
-    if (prato) {
-      const item = prato.item;
-      const consumo = prato.kg * v.quantidade;
-      mapaConsumo[item] = (mapaConsumo[item] || 0) + consumo;
-    }
-  });
-  
-  // Calcula desperdício real
-  inventario.forEach(i => {
-    const consumoReal = i.inicial + i.compras - i.final;
-    const consumoTeorico = mapaConsumo[i.item] || 0;
-    const perda = Math.max(0, consumoReal - consumoTeorico);
-    desperdicio += perda * i.custo_kg;
-  });
-  
-  // Calcula CMV
-  let cmv = 0;
-  inventario.forEach(i => {
-    const consumoReal = i.inicial + i.compras - i.final;
-    cmv += consumoReal * i.custo_kg;
-  });
-  
-  // Calcula margem
-  const margem = totalReceita > 0 ? ((totalReceita - cmv) / totalReceita * 100) : 0;
+  // Calcula CMV (Custo Mercadoria Vendida)
+  const cmv = calcularCMV(vendas, inventario);
   
   return {
+    totalPratos,
+    totalVendas,
     totalReceita,
-    totalVendido,
     desperdicio,
     cmv,
-    margem
+    margem: totalReceita > 0 ? ((totalReceita - cmv) / totalReceita * 100) : 0
   };
 }
 
-// Gera insights automáticos
-function gerarInsights(metricas, pratos, vendas, inventario) {
-  const insights = [];
+// Calcula desperdício de alimentos
+function calcularDesperdicio(pratos, vendas, inventario) {
+  const consumoPorItem = {};
   
-  if (metricas.desperdicio > 0) {
-    insights.push(`Desperdício estimado de ${UIManager.BRL(metricas.desperdicio)}. Verifique porcionamento e controle de estoque.`);
-  }
-  
-  if (metricas.margem < 70) {
-    insights.push(`Margem de ${metricas.margem.toFixed(1)}% abaixo do ideal. Considere revisar preços ou custos.`);
-  } else {
-    insights.push(`Margem de ${metricas.margem.toFixed(1)}% dentro do esperado.`);
-  }
-  
-  if (metricas.cmv > 0 && metricas.totalReceita > 0) {
-    const cmvPerc = (metricas.cmv / metricas.totalReceita * 100);
-    if (cmvPerc > 40) {
-      insights.push(`CMV de ${cmvPerc.toFixed(1)}% acima do recomendado (35%).`);
+  // Calcula consumo total por item
+  pratos.forEach(prato => {
+    const vendasPrato = vendas.filter(v => v.prato === prato.nome);
+    const totalVendas = vendasPrato.reduce((sum, v) => sum + (v.quantidade || 0), 0);
+    const consumoTotal = totalVendas * (prato.kg || 0);
+    
+    if (!consumoPorItem[prato.item]) {
+      consumoPorItem[prato.item] = 0;
     }
-  }
-  
-  // Encontra itens com maior desperdício
-  const mapaPerda = {};
-  const mapaConsumo = {};
-  
-  vendas.forEach(v => {
-    const prato = pratos.find(p => (p.nome || p.nome_prato) === v.prato);
-    if (prato) {
-      const item = prato.item;
-      const consumo = prato.kg * v.quantidade;
-      mapaConsumo[item] = (mapaConsumo[item] || 0) + consumo;
-    }
+    consumoPorItem[prato.item] += consumoTotal;
   });
   
-  inventario.forEach(i => {
-    const consumoReal = i.inicial + i.compras - i.final;
-    const consumoTeorico = mapaConsumo[i.item] || 0;
-    const perda = Math.max(0, consumoReal - consumoTeorico);
-    if (perda > 0) {
-      mapaPerda[i.item] = perda * i.custo_kg;
-    }
+  // Calcula desperdício comparando com inventário
+  let desperdicioTotal = 0;
+  inventario.forEach(item => {
+    const consumo = consumoPorItem[item.item] || 0;
+    const disponivel = (item.inicial || 0) + (item.compras || 0);
+    const desperdicio = Math.max(0, disponivel - consumo - (item.final || 0));
+    desperdicioTotal += desperdicio * (item.custo_kg || 0);
   });
   
-  const itensPerda = Object.entries(mapaPerda)
-    .sort(([,a], [,b]) => b - a)
-    .slice(0, 3);
-  
-  if (itensPerda.length > 0) {
-    insights.push(`Principais itens com desperdício: ${itensPerda.map(([item]) => item).join(', ')}`);
-  }
-  
-  return insights;
+  return desperdicioTotal;
 }
 
-// Renderiza dashboard
-function renderizarDashboard() {
-  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
-  const vendas = window.VendasManager ? window.VendasManager.getVendas() : [];
-  const inventario = window.InventarioManager ? window.InventarioManager.getInventario() : [];
+// Calcula CMV
+function calcularCMV(vendas, inventario) {
+  const custoPorItem = {};
   
-  const metricas = calcularMetricas(pratos, vendas, inventario);
-  const insights = gerarInsights(metricas, pratos, vendas, inventario);
+  // Obtém custo por kg do inventário
+  inventario.forEach(item => {
+    custoPorItem[item.item] = item.custo_kg || 0;
+  });
   
-  // Atualiza KPIs
-  document.getElementById('kpi-pratos').innerHTML = `<span>Total de Pratos</span><strong>${pratos.length}</strong>`;
-  document.getElementById('kpi-vendas').innerHTML = `<span>Total Vendido</span><strong>${metricas.totalVendido}</strong>`;
-  document.getElementById('kpi-receita').innerHTML = `<span>Receita Total</span><strong>${UIManager.BRL(metricas.totalReceita)}</strong>`;
-  document.getElementById('kpi-desperdicio').innerHTML = `<span>Desperdício</span><strong>${UIManager.BRL(metricas.desperdicio)}</strong>`;
-  document.getElementById('kpi-cmv').innerHTML = `<span>CMV</span><strong>${UIManager.BRL(metricas.cmv)}</strong>`;
-  document.getElementById('kpi-margem').innerHTML = `<span>Margem</span><strong>${metricas.margem.toFixed(1)}%</strong>`;
+  // Calcula CMV total
+  let cmvTotal = 0;
+  const pratosVendidos = {};
   
-  // Renderiza insights
-  const insightsEl = document.getElementById('insights');
-  if (insightsEl) {
-    insightsEl.innerHTML = insights.map(i => `<div class="insight">${i}</div>`).join('');
+  // Agrupa vendas por prato
+  vendas.forEach(venda => {
+    if (!pratosVendidos[venda.prato]) {
+      pratosVendidos[venda.prato] = 0;
+    }
+    pratosVendidos[venda.prato] += venda.quantidade || 0;
+  });
+  
+  // Calcula CMV por prato (precisa dos dados de pratos)
+  if (window.PratosManager) {
+    const pratos = window.PratosManager.getPratos();
+    Object.entries(pratosVendidos).forEach(([nomePrato, quantidade]) => {
+      const prato = pratos.find(p => p.nome === nomePrato);
+      if (prato && custoPorItem[prato.item]) {
+        cmvTotal += quantidade * (prato.kg || 0) * custoPorItem[prato.item];
+      }
+    });
   }
   
-  // Renderiza gráfico de desperdício
-  renderizarGraficoDesperdicio(pratos, vendas, inventario);
+  return cmvTotal;
 }
 
-// Renderiza gráfico de desperdício por item
+// Renderiza KPIs do dashboard
+function renderizarKPIs(metricas) {
+  const kpis = [
+    { id: 'kpi-pratos', label: 'Total de Pratos', valor: metricas.totalPratos },
+    { id: 'kpi-vendas', label: 'Total Vendido', valor: metricas.totalVendas },
+    { id: 'kpi-receita', label: 'Receita Total', valor: UIManager.BRL(metricas.totalReceita) },
+    { id: 'kpi-desperdicio', label: 'Desperdício', valor: UIManager.BRL(metricas.desperdicio) },
+    { id: 'kpi-cmv', label: 'CMV', valor: UIManager.BRL(metricas.cmv) },
+    { id: 'kpi-margem', label: 'Margem', valor: metricas.margem.toFixed(1) + '%' }
+  ];
+  
+  kpis.forEach(kpi => {
+    const elemento = document.getElementById(kpi.id);
+    if (elemento) {
+      elemento.innerHTML = `<span>${kpi.label}</span><strong>${kpi.valor}</strong>`;
+    }
+  });
+}
+
+// Renderiza gráfico de desperdício
 function renderizarGraficoDesperdicio(pratos, vendas, inventario) {
-  const canvas = document.getElementById('chartPerda');
-  if (!canvas) return;
+  const ctx = document.getElementById('chartPerda');
+  if (!ctx) return;
+  
+  const desperdicioPorItem = {};
+  const consumoPorItem = {};
+  
+  // Calcula consumo por item
+  pratos.forEach(prato => {
+    const vendasPrato = vendas.filter(v => v.prato === prato.nome);
+    const totalVendas = vendasPrato.reduce((sum, v) => sum + (v.quantidade || 0), 0);
+    const consumoTotal = totalVendas * (prato.kg || 0);
+    
+    if (!consumoPorItem[prato.item]) {
+      consumoPorItem[prato.item] = 0;
+    }
+    consumoPorItem[prato.item] += consumoTotal;
+  });
   
   // Calcula desperdício por item
-  const mapaConsumo = {};
-  const mapaPerda = {};
-  
-  vendas.forEach(v => {
-    const prato = pratos.find(p => (p.nome || p.nome_prato) === v.prato);
-    if (prato) {
-      const item = prato.item;
-      const consumo = prato.kg * v.quantidade;
-      mapaConsumo[item] = (mapaConsumo[item] || 0) + consumo;
-    }
+  inventario.forEach(item => {
+    const consumo = consumoPorItem[item.item] || 0;
+    const disponivel = (item.inicial || 0) + (item.compras || 0);
+    const desperdicio = Math.max(0, disponivel - consumo - (item.final || 0));
+    desperdicioPorItem[item.item] = desperdicio;
   });
   
-  inventario.forEach(i => {
-    const consumoReal = i.inicial + i.compras - i.final;
-    const consumoTeorico = mapaConsumo[i.item] || 0;
-    const perda = Math.max(0, consumoReal - consumoTeorico);
-    if (perda > 0) {
-      mapaPerda[i.item] = perda * i.custo_kg;
-    }
-  });
+  // Prepara dados para o gráfico
+  const labels = Object.keys(desperdicioPorItem);
+  const data = Object.values(desperdicioPorItem);
   
-  const labels = Object.keys(mapaPerda);
-  const data = Object.values(mapaPerda);
-  
-  // Destroi gráfico anterior se existir
   if (chartPerda) {
     chartPerda.destroy();
   }
   
-  // Cria novo gráfico
-  const ctx = canvas.getContext('2d');
   chartPerda = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: labels,
       datasets: [{
-        label: 'Desperdício (R$)',
+        label: 'Desperdício (kg)',
         data: data,
         backgroundColor: 'rgba(239, 68, 68, 0.8)',
         borderColor: 'rgba(239, 68, 68, 1)',
@@ -182,37 +158,80 @@ function renderizarGraficoDesperdicio(pratos, vendas, inventario) {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          labels: {
-            color: '#f8fafc'
-          }
+          labels: { color: '#fff' }
         }
       },
       scales: {
         x: {
-          ticks: {
-            color: '#f8fafc'
-          },
-          grid: {
-            color: 'rgba(255, 255, 255, 0.1)'
-          }
+          ticks: { color: '#fff' }
         },
         y: {
-          ticks: {
-            color: '#f8fafc'
-          },
-          grid: {
-            color: 'rgba(255, 255, 255, 0.1)'
-          }
+          ticks: { color: '#fff' }
         }
       }
     }
   });
 }
 
+// Gera insights automáticos
+function gerarInsights(metricas, pratos, vendas, inventario) {
+  const insights = [];
+  
+  // Insight sobre desperdício
+  if (metricas.desperdicio > metricas.totalReceita * 0.05) {
+    insights.push('⚠️ Desperdício acima de 5% da receita. Reveja o controle de porções.');
+  }
+  
+  // Insight sobre margem
+  if (metricas.margem < 30) {
+    insights.push('📉 Margem abaixo de 30%. Considere revisar custos ou preços.');
+  }
+  
+  // Insight sobre pratos mais vendidos
+  const vendasPorPrato = {};
+  vendas.forEach(v => {
+    if (!vendasPorPrato[v.prato]) vendasPorPrato[v.prato] = 0;
+    vendasPorPrato[v.prato] += v.quantidade || 0;
+  });
+  
+  const maisVendido = Object.entries(vendasPorPrato)
+    .sort(([,a], [,b]) => b - a)[0];
+  
+  if (maisVendido) {
+    insights.push(`🏆 Mais vendido: ${maisVendido[0]} (${maisVendido[1]} unidades)`);
+  }
+  
+  return insights;
+}
+
+// Renderiza insights
+function renderizarInsights(insights) {
+  const container = document.getElementById('insights');
+  if (!container) return;
+  
+  container.innerHTML = insights.map(insight => 
+    `<div class="insight">${insight}</div>`
+  ).join('');
+}
+
+// Renderiza dashboard completo
+function renderizarDashboard() {
+  const pratos = window.PratosManager ? window.PratosManager.getPratos() : [];
+  const vendas = window.VendasManager ? window.VendasManager.getVendas() : [];
+  const inventario = window.InventarioManager ? window.InventarioManager.getInventario() : [];
+  
+  const metricas = calcularMetricas(pratos, vendas, inventario);
+  
+  renderizarKPIs(metricas);
+  renderizarGraficoDesperdicio(pratos, vendas, inventario);
+  
+  const insights = gerarInsights(metricas, pratos, vendas, inventario);
+  renderizarInsights(insights);
+}
+
 // Exporta funções para uso global
 window.DashboardManager = {
-  calcularMetricas,
-  gerarInsights,
   renderizarDashboard,
-  renderizarGraficoDesperdicio
+  calcularMetricas,
+  gerarInsights
 };

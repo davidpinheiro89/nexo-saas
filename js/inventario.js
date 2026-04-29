@@ -41,40 +41,40 @@ async function salvarInventario() {
     return;
   }
 
-  const dataInicio = document.getElementById('invDataInicio')?.value;
-  const dataFim = document.getElementById('invDataFim')?.value;
-  const item = document.getElementById('invItem')?.value?.trim();
-  const inicial = UIManager.NUM(document.getElementById('invInicial')?.value);
-  const compras = UIManager.NUM(document.getElementById('invCompras')?.value);
-  const final = UIManager.NUM(document.getElementById('invFinal')?.value);
-  const custo = UIManager.NUM(document.getElementById('invCusto')?.value);
+  const dataInicio = invDataInicio.value;
+  const dataFim = invDataFim.value;
   
-  if (!dataInicio || !dataFim || !item || !custo) {
-    alert('Preencha todos os campos obrigatórios.');
+  if (!dataInicio || !dataFim) {
+    alert('Informe a data inicial e a data final do inventário.');
     return;
   }
   
   if (dataFim < dataInicio) {
-    alert('A data final não pode ser menor que a data inicial.');
+    alert('A data final do inventário não pode ser menor que a data inicial.');
     return;
   }
 
-  const invItem = {
+  const it = {
     restaurante_id: restauranteId,
     data_inicio: dataInicio,
     data_fim: dataFim,
     mes: dataInicio.slice(0, 7),
-    item: UIManager.normalizarItem(item),
-    inicial,
-    compras,
-    final,
-    custo_kg: custo
+    item: UIManager.normalizarItem(invItem.value),
+    inicial: UIManager.NUM(invInicial.value),
+    compras: UIManager.NUM(invCompras.value),
+    final: UIManager.NUM(invFinal.value),
+    custo_kg: UIManager.NUM(invCusto.value)
   };
+
+  if (!it.item || !it.custo_kg) {
+    alert('Preencha item/proteína e custo/kg.');
+    return;
+  }
 
   const atual = editInv !== null ? inventario[editInv] : null;
   const res = atual && atual.id 
-    ? await supabase.from('inventario').update(invItem).eq('id', atual.id)
-    : await supabase.from('inventario').insert(invItem);
+    ? await supabase.from('inventario').update(it).eq('id', atual.id)
+    : await supabase.from('inventario').insert(it);
 
   if (res.error) {
     console.error(res.error);
@@ -92,13 +92,13 @@ function editarInventario(index) {
   editInv = index;
   const it = inventario[index];
   
-  document.getElementById('invDataInicio').value = it.data_inicio || '';
-  document.getElementById('invDataFim').value = it.data_fim || '';
-  document.getElementById('invItem').value = it.item || '';
-  document.getElementById('invInicial').value = it.inicial || '';
-  document.getElementById('invCompras').value = it.compras || '';
-  document.getElementById('invFinal').value = it.final || '';
-  document.getElementById('invCusto').value = it.custo_kg || '';
+  invDataInicio.value = it.data_inicio || '';
+  invDataFim.value = it.data_fim || '';
+  invItem.value = it.item || '';
+  invInicial.value = it.inicial || '';
+  invCompras.value = it.compras || '';
+  invFinal.value = it.final || '';
+  invCusto.value = it.custo_kg || '';
   
   document.getElementById('btnSalvarInv').textContent = 'Atualizar';
   document.getElementById('btnCancelarInv').style.display = 'inline-block';
@@ -107,13 +107,13 @@ function editarInventario(index) {
 // Cancela edição de inventário
 function cancelarEdicaoInventario() {
   editInv = null;
-  document.getElementById('invDataInicio').value = '';
-  document.getElementById('invDataFim').value = '';
-  document.getElementById('invItem').value = '';
-  document.getElementById('invInicial').value = '';
-  document.getElementById('invCompras').value = '';
-  document.getElementById('invFinal').value = '';
-  document.getElementById('invCusto').value = '';
+  invDataInicio.value = '';
+  invDataFim.value = '';
+  invItem.value = '';
+  invInicial.value = '';
+  invCompras.value = '';
+  invFinal.value = '';
+  invCusto.value = '';
   
   document.getElementById('btnSalvarInv').textContent = 'Adicionar';
   document.getElementById('btnCancelarInv').style.display = 'none';
@@ -144,29 +144,23 @@ function renderizarInventario() {
   const tbody = document.getElementById('invTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = inventario.map((it, i) => {
-    const consumo = it.inicial + it.compras - it.final;
-    const custo = consumo * it.custo_kg;
-    const periodo = it.data_inicio === it.data_fim ? it.data_inicio : `${it.data_inicio} a ${it.data_fim}`;
-    
-    return `
-      <tr>
-        <td>${periodo}</td>
-        <td>${it.item}</td>
-        <td>${it.inicial?.toFixed(2) || 0}kg</td>
-        <td>${it.compras?.toFixed(2) || 0}kg</td>
-        <td>${it.final?.toFixed(2) || 0}kg</td>
-        <td>${consumo.toFixed(2)}kg</td>
-        <td>${UIManager.BRL(custo)}</td>
-        <td>
-          <div class="actions">
-            <button class="btn-edit" onclick="InventarioManager.editarInventario(${i})">Editar</button>
-            <button class="btn-red" onclick="InventarioManager.excluirInventario(${i})">Excluir</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+  tbody.innerHTML = inventario.map((it, i) => `
+    <tr>
+      <td>${it.data_inicio || ''}</td>
+      <td>${it.data_fim || ''}</td>
+      <td>${it.item || ''}</td>
+      <td>${it.inicial || ''}kg</td>
+      <td>${it.compras || ''}kg</td>
+      <td>${it.final || ''}kg</td>
+      <td>${UIManager.BRL(it.custo_kg)}/kg</td>
+      <td>
+        <div class="actions">
+          <button class="btn-edit" onclick="InventarioManager.editarInventario(${i})">Editar</button>
+          <button class="btn-red" onclick="InventarioManager.excluirInventario(${i})">Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
 // Limpa dados do módulo

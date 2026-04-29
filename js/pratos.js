@@ -41,33 +41,28 @@ async function salvarPrato() {
     return;
   }
 
-  const nome = document.getElementById('pratoNome')?.value?.trim();
-  const item = document.getElementById('pratoItem')?.value?.trim();
-  const grupo = document.getElementById('pratoGrupo')?.value;
-  const kg = UIManager.NUM(document.getElementById('pratoKg')?.value);
-  const preco = UIManager.NUM(document.getElementById('pratoPreco')?.value);
-  const custo = UIManager.NUM(document.getElementById('pratoCusto')?.value);
-  
-  if (!nome || !item || !grupo || !kg || !preco) {
-    alert('Preencha todos os campos obrigatórios.');
-    return;
-  }
-
-  const prato = {
+  const nome = UIManager.texto(pratoNome.value);
+  const item = UIManager.normalizarItem(pratoItem.value);
+  const p = {
     restaurante_id: restauranteId,
     nome,
     nome_prato: nome,
+    grupo: pratoGrupo.value,
     item,
-    grupo,
-    kg,
-    preco,
-    custo
+    kg: UIManager.NUM(pratoKg.value),
+    preco: UIManager.NUM(pratoPreco.value),
+    custo: UIManager.NUM(pratoCusto.value)
   };
+
+  if (!p.nome || !p.item || !p.kg || !p.preco) {
+    alert('Preencha nome, item, kg/prato e preço.');
+    return;
+  }
 
   const atual = editPrato !== null ? pratos[editPrato] : null;
   const res = atual && atual.id 
-    ? await supabase.from('pratos').update(prato).eq('id', atual.id)
-    : await supabase.from('pratos').insert(prato);
+    ? await supabase.from('pratos').update(p).eq('id', atual.id)
+    : await supabase.from('pratos').insert(p);
 
   if (res.error) {
     console.error(res.error);
@@ -85,12 +80,12 @@ function editarPrato(index) {
   editPrato = index;
   const p = pratos[index];
   
-  document.getElementById('pratoNome').value = p.nome || '';
-  document.getElementById('pratoItem').value = p.item || '';
-  document.getElementById('pratoGrupo').value = p.grupo || '';
-  document.getElementById('pratoKg').value = p.kg || '';
-  document.getElementById('pratoPreco').value = p.preco || '';
-  document.getElementById('pratoCusto').value = p.custo || '';
+  pratoNome.value = p.nome || '';
+  pratoItem.value = p.item || '';
+  pratoGrupo.value = p.grupo || '';
+  pratoKg.value = p.kg || '';
+  pratoPreco.value = p.preco || '';
+  pratoCusto.value = p.custo || '';
   
   document.getElementById('btnSalvarPrato').textContent = 'Atualizar';
   document.getElementById('btnCancelarPrato').style.display = 'inline-block';
@@ -99,12 +94,12 @@ function editarPrato(index) {
 // Cancela edição de prato
 function cancelarEdicaoPrato() {
   editPrato = null;
-  document.getElementById('pratoNome').value = '';
-  document.getElementById('pratoItem').value = '';
-  document.getElementById('pratoGrupo').value = '';
-  document.getElementById('pratoKg').value = '';
-  document.getElementById('pratoPreco').value = '';
-  document.getElementById('pratoCusto').value = '';
+  pratoNome.value = '';
+  pratoItem.value = '';
+  pratoGrupo.value = '';
+  pratoKg.value = '';
+  pratoPreco.value = '';
+  pratoCusto.value = '';
   
   document.getElementById('btnSalvarPrato').textContent = 'Adicionar';
   document.getElementById('btnCancelarPrato').style.display = 'none';
@@ -135,27 +130,22 @@ function renderizarPratos() {
   const tbody = document.getElementById('pratosTableBody');
   if (!tbody) return;
 
-  tbody.innerHTML = pratos.map((p, i) => {
-    const cmv = p.preco ? ((p.custo || 0) / p.preco * 100) : 0;
-    const margem = p.preco ? (((p.preco - (p.custo || 0)) / p.preco) * 100) : 0;
-    
-    return `
-      <tr>
-        <td>${p.nome}</td>
-        <td>${p.item}</td>
-        <td>${p.grupo}</td>
-        <td>${p.kg.toFixed(3)}</td>
-        <td>${UIManager.BRL(p.preco)}</td>
-        <td>${UIManager.BRL(p.custo || 0)}</td>
-        <td>
-          <div class="actions">
-            <button class="btn-edit" onclick="PratosManager.editarPrato(${i})">Editar</button>
-            <button class="btn-red" onclick="PratosManager.excluirPrato(${i})">Excluir</button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
+  tbody.innerHTML = pratos.map((p, i) => `
+    <tr>
+      <td>${p.nome || ''}</td>
+      <td>${p.item || ''}</td>
+      <td>${p.grupo || ''}</td>
+      <td>${p.kg || ''}kg</td>
+      <td>${UIManager.BRL(p.preco)}</td>
+      <td>${UIManager.BRL(p.custo)}</td>
+      <td>
+        <div class="actions">
+          <button class="btn-edit" onclick="PratosManager.editarPrato(${i})">Editar</button>
+          <button class="btn-red" onclick="PratosManager.excluirPrato(${i})">Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
 }
 
 // Limpa dados do módulo

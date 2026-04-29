@@ -1,4 +1,4 @@
-// Módulo de gerenciamento do Supabase do NEXO
+// Configuração e cliente Supabase
 let supabaseClient = null;
 let restauranteId = null;
 let usuarioLogado = null;
@@ -6,45 +6,47 @@ let usuarioLogado = null;
 // Inicializa o cliente Supabase
 function initSupabase() {
   if (!window.NEXO_CONFIG) {
-    console.error('Configuração NEXO não encontrada');
-    return;
+    console.error('Configuração do NEXO não encontrada');
+    return null;
   }
 
-  supabaseClient = window.supabase.createClient(
-    window.NEXO_CONFIG.SUPABASE_URL,
-    window.NEXO_CONFIG.SUPABASE_ANON_KEY,
-    {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true
-      }
-    }
-  );
+  const SUPABASE_URL = window.NEXO_CONFIG.SUPABASE_URL;
+  const SUPABASE_KEY = window.NEXO_CONFIG.SUPABASE_ANON_KEY;
 
-  console.log('Cliente Supabase inicializado');
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
+      debug: false
+    }
+  });
+
+  return supabaseClient;
 }
 
 // Obtém o cliente Supabase
 function getSupabaseClient() {
+  if (!supabaseClient) {
+    return initSupabase();
+  }
   return supabaseClient;
 }
 
-// Define o ID do restaurante
+// Define o restaurante_id atual
 function setRestauranteId(id) {
   restauranteId = id;
-  console.log('Restaurante ID definido:', id);
 }
 
-// Obtém o ID do restaurante
+// Obtém o restaurante_id atual
 function getRestauranteId() {
   return restauranteId;
 }
 
 // Define o usuário logado
-function setUsuarioLogado(usuario) {
-  usuarioLogado = usuario;
-  console.log('Usuário logado definido:', usuario);
+function setUsuarioLogado(user) {
+  usuarioLogado = user;
 }
 
 // Obtém o usuário logado
@@ -52,19 +54,12 @@ function getUsuarioLogado() {
   return usuarioLogado;
 }
 
-// Limpa estado
-function limparEstado() {
-  restauranteId = null;
-  usuarioLogado = null;
-}
-
-// Exporta funções para uso global
+// Exporta as funções para uso global
 window.SupabaseManager = {
   initSupabase,
   getSupabaseClient,
   setRestauranteId,
   getRestauranteId,
   setUsuarioLogado,
-  getUsuarioLogado,
-  limparEstado
+  getUsuarioLogado
 };
