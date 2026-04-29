@@ -57,14 +57,14 @@ async function carregarPerfilUsuario() {
     throw userError;
   }
   
-  if (userData) {
-    // Define restaurante_id para clientes
-    if (userData.tipo === 'cliente' && userData.restaurante_id) {
-      SupabaseManager.setRestauranteId(userData.restaurante_id);
-    }
-    
-    // Atualiza nome no header
-    const nomeEl = document.getElementById('nomeRestauranteTopo');
+if (userData) {
+  // Define restaurante_id para clientes
+  if (userData.restaurante_id) {
+    SupabaseManager.setRestauranteId(userData.restaurante_id);
+  }
+
+  // Atualiza nome no header
+  const nomeEl = document.getElementById('nomeRestauranteTopo');
     if (nomeEl) {
       if (userData.tipo === 'admin_master') {
         nomeEl.textContent = 'Painel Admin Master';
@@ -75,7 +75,7 @@ async function carregarPerfilUsuario() {
   }
 }
 
-// Processa callback de autenticação (após confirmação de e-mail)
+// Processa callback de autenticação} (após confirmação de e-mail)
 async function processarAuthCallback() {
   try {
     const supabase = SupabaseManager.getSupabaseClient();
