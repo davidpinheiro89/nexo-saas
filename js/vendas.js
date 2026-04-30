@@ -10,6 +10,32 @@ const VendasManager = (() => {
     return Number(String(v || '').replace(',', '.')) || 0;
   }
 
+  function campoPorLabel(textoLabel) {
+    const labels = [...document.querySelectorAll('label')];
+
+    const label = labels.find(l =>
+      (l.innerText || '').toLowerCase().includes(textoLabel.toLowerCase())
+    );
+
+    if (!label) return null;
+
+    const container = label.parentElement;
+    if (!container) return null;
+
+    return container.querySelector('input, select, textarea');
+  }
+
+  function getCampos() {
+    return {
+      modo: document.getElementById('vendaModo') || campoPorLabel('Modo'),
+      dataInicio: document.getElementById('vendaDataInicio') || campoPorLabel('Data inicial'),
+      dataFim: document.getElementById('vendaDataFim') || campoPorLabel('Data final'),
+      prato: document.getElementById('vendaPrato') || campoPorLabel('Prato'),
+      quantidade: document.getElementById('vendaQuantidade') || campoPorLabel('Quantidade vendida'),
+      receita: document.getElementById('vendaReceitaPreview') || campoPorLabel('Receita automática')
+    };
+  }
+
   async function carregarVendas() {
     const supabase = SupabaseManager.getSupabaseClient();
     const restauranteId = SupabaseManager.getRestauranteId();
@@ -33,7 +59,8 @@ const VendasManager = (() => {
   }
 
   function atualizarSelectPratos() {
-    const select = document.getElementById('vendaPrato');
+    const campos = getCampos();
+    const select = campos.prato;
 
     if (!select) return;
 
@@ -41,71 +68,52 @@ const VendasManager = (() => {
 
     select.innerHTML =
       '<option value="">Selecione um prato</option>' +
-      pratos.map(p => `
-        <option value="${p.nome_prato}">
-          ${p.nome_prato}
-        </option>
-      `).join('');
+      pratos.map(p => {
+        const nome = p.nome_prato || p.nome || '';
+        return `<option value="${nome}">${nome}</option>`;
+      }).join('');
 
     atualizarReceitaPreview();
   }
 
   function atualizarReceitaPreview() {
-    const pratoNome =
-      document.getElementById('vendaPrato')?.value || '';
+    const campos = getCampos();
 
-    const quantidade =
-      num(document.getElementById('vendaQuantidade')?.value);
+    const pratoNome = campos.prato?.value || '';
+    const quantidade = num(campos.quantidade?.value);
 
-    const prato = PratosManager
-      .getPratos()
-      .find(p => p.nome_prato === pratoNome);
+    const prato = PratosManager.getPratos().find(p =>
+      (p.nome_prato || p.nome) === pratoNome
+    );
 
-    const receita =
-      prato
-        ? quantidade * Number(prato.preco_venda || 0)
-        : 0;
+    const receita = prato
+      ? quantidade * Number(prato.preco_venda || p.preco || 0)
+      : 0;
 
-    const campo =
-      document.getElementById('vendaReceitaPreview');
-
-    if (campo) {
-      campo.value = UIManager.BRL(receita);
+    if (campos.receita) {
+      campos.receita.value = UIManager.BRL(receita);
     }
   }
 
   async function salvarVenda() {
     const supabase = SupabaseManager.getSupabaseClient();
-
-    const restauranteId =
-      SupabaseManager.getRestauranteId();
+    const restauranteId = SupabaseManager.getRestauranteId();
 
     if (!restauranteId) {
       alert('Restaurante não identificado.');
       return;
     }
 
-    const prato =
-      document.getElementById('vendaPrato')?.value;
+    const campos = getCampos();
 
-    const quantidade =
-      num(document.getElementById('vendaQuantidade')?.value);
+    const pratoNome = campos.prato?.value || '';
+    const quantidade = num(campos.quantidade?.value);
+    const modo = campos.modo?.value || 'diario';
+    const dataInicio = campos.dataInicio?.value;
+    const dataFimCampo = campos.dataFim?.value;
+    const dataFim = modo === 'consolidado' ? (dataFimCampo || dataInicio) : dataInicio;
 
-    const modo =
-      document.getElementById('vendaModo')?.value || 'diario';
-
-    const dataInicio =
-      document.getElementById('vendaDataInicio')?.value;
-
-    const dataFimCampo =
-      document.getElementById('vendaDataFim')?.value;
-
-    const dataFim =
-      modo === 'consolidado'
-        ? (dataFimCampo || dataInicio)
-        : dataInicio;
-
-    if (!prato) {
+    if (!pratoNome) {
       alert('Selecione um prato.');
       return;
     }
@@ -120,19 +128,17 @@ const VendasManager = (() => {
       return;
     }
 
-    const pratoObj =
-      PratosManager
-        .getPratos()
-        .find(p => p.nome_prato === prato);
+    const prato = PratosManager.getPratos().find(p =>
+      (p.nome_prato || p.nome) === pratoNome
+    );
 
-    const receita =
-      pratoObj
-        ? quantidade * Number(pratoObj.preco_venda || 0)
-        : 0;
+    const receita = prato
+      ? quantidade * Number(prato.preco_venda || prato.preco || 0)
+      : 0;
 
     const payload = {
       restaurante_id: restauranteId,
-      prato,
+      prato: pratoNome,
       quantidade,
       modo,
       data_inicio: dataInicio,
@@ -141,23 +147,17 @@ const VendasManager = (() => {
       receita
     };
 
-    const response = editandoId
-      ? await supabase
-          .from('vendas')
-          .update(payload)
-          .eq('id', editandoId)
-      : await supabase
-          .from('vendas')
-          .insert(payload);
+    const res = editandoId
+      ? await supabase.from('vendas').update(payload).eq('id', editandoId)
+      : await supabase.from('vendas').insert(payload);
 
-    if (response.error) {
-      console.error(response.error);
+    if (res.error) {
+      console.error('Erro ao salvar venda:', res.error);
       alert('Erro ao salvar venda.');
       return;
     }
 
     cancelarEdicao();
-
     await carregarVendas();
 
     if (window.DashboardManager?.renderizarDashboard) {
@@ -166,115 +166,66 @@ const VendasManager = (() => {
   }
 
   function renderizarVendas() {
-    const tbody =
-      document.getElementById('vendasTableBody');
-
+    const tbody = document.getElementById('vendasTableBody');
     if (!tbody) return;
 
     tbody.innerHTML = vendas.map(v => `
       <tr>
-        <td>${v.data_inicio || ''}</td>
-        <td>${v.prato || ''}</td>
+        <td>${v.data_inicio || v.data || ''}</td>
         <td>${v.modo || ''}</td>
+        <td>${v.prato || ''}</td>
         <td>${v.quantidade || 0}</td>
         <td>${UIManager.BRL(v.receita || 0)}</td>
-
         <td>
           <div class="actions">
-
-            <button
-              class="btn-edit"
-              onclick="VendasManager.editarVenda('${v.id}')"
-            >
-              Editar
-            </button>
-
-            <button
-              class="btn-red"
-              onclick="VendasManager.excluirVenda('${v.id}')"
-            >
-              Excluir
-            </button>
-
+            <button class="btn-edit" onclick="VendasManager.editarVenda('${v.id}')">Editar</button>
+            <button class="btn-red" onclick="VendasManager.excluirVenda('${v.id}')">Excluir</button>
           </div>
         </td>
-
       </tr>
     `).join('');
   }
 
   function editarVenda(id) {
-    const venda =
-      vendas.find(v => String(v.id) === String(id));
-
+    const venda = vendas.find(v => String(v.id) === String(id));
     if (!venda) return;
 
     editandoId = id;
 
-    document.getElementById('vendaPrato').value =
-      venda.prato || '';
+    const campos = getCampos();
 
-    document.getElementById('vendaQuantidade').value =
-      venda.quantidade || '';
-
-    document.getElementById('vendaModo').value =
-      venda.modo || 'diario';
-
-    document.getElementById('vendaDataInicio').value =
-      venda.data_inicio || '';
-
-    document.getElementById('vendaDataFim').value =
-      venda.data_fim || '';
+    if (campos.prato) campos.prato.value = venda.prato || '';
+    if (campos.quantidade) campos.quantidade.value = venda.quantidade || '';
+    if (campos.modo) campos.modo.value = venda.modo || 'diario';
+    if (campos.dataInicio) campos.dataInicio.value = venda.data_inicio || venda.data || '';
+    if (campos.dataFim) campos.dataFim.value = venda.data_fim || venda.data_inicio || venda.data || '';
 
     atualizarReceitaPreview();
 
-    const btn =
-      document.getElementById('btnSalvarVenda');
-
-    if (btn) {
-      btn.textContent = 'Atualizar venda';
-    }
+    const btn = document.getElementById('btnSalvarVenda');
+    if (btn) btn.textContent = 'Atualizar venda';
   }
 
   function cancelarEdicao() {
     editandoId = null;
 
-    [
-      'vendaQuantidade',
-      'vendaDataInicio',
-      'vendaDataFim',
-      'vendaReceitaPreview'
-    ].forEach(id => {
-      const el = document.getElementById(id);
+    const campos = getCampos();
 
-      if (el) el.value = '';
-    });
+    if (campos.prato) campos.prato.value = '';
+    if (campos.quantidade) campos.quantidade.value = '';
+    if (campos.dataInicio) campos.dataInicio.value = '';
+    if (campos.dataFim) campos.dataFim.value = '';
+    if (campos.receita) campos.receita.value = '';
+    if (campos.modo) campos.modo.value = 'diario';
 
-    const prato =
-      document.getElementById('vendaPrato');
-
-    if (prato) prato.value = '';
-
-    const modo =
-      document.getElementById('vendaModo');
-
-    if (modo) modo.value = 'diario';
-
-    const btn =
-      document.getElementById('btnSalvarVenda');
-
-    if (btn) {
-      btn.textContent = 'Salvar venda';
-    }
+    const btn = document.getElementById('btnSalvarVenda');
+    if (btn) btn.textContent = 'Salvar venda';
   }
 
   async function excluirVenda(id) {
-    if (!confirm('Excluir esta venda?')) {
-      return;
-    }
+    if (!confirm('Excluir esta venda?')) return;
 
-    const supabase =
-      SupabaseManager.getSupabaseClient();
+    const supabase = SupabaseManager.getSupabaseClient();
 
     const { error } = await supabase
       .from('vendas')
@@ -282,7 +233,7 @@ const VendasManager = (() => {
       .eq('id', id);
 
     if (error) {
-      console.error(error);
+      console.error('Erro ao excluir venda:', error);
       alert('Erro ao excluir venda.');
       return;
     }
@@ -300,18 +251,12 @@ const VendasManager = (() => {
     renderizarVendas();
   }
 
-  document.addEventListener('input', e => {
-    if (e.target?.id === 'vendaQuantidade') {
-      atualizarReceitaPreview();
-    }
+  document.addEventListener('input', () => {
+    atualizarReceitaPreview();
   });
 
-  document.addEventListener('change', e => {
-    if (
-      e.target?.id === 'vendaPrato'
-    ) {
-      atualizarReceitaPreview();
-    }
+  document.addEventListener('change', () => {
+    atualizarReceitaPreview();
   });
 
   return {
