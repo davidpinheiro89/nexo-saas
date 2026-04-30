@@ -10,6 +10,32 @@ const PratosManager = (() => {
     return Number(String(v || '').replace(',', '.')) || 0;
   }
 
+  function campoPorLabel(textoLabel) {
+    const labels = [...document.querySelectorAll('label')];
+
+    const label = labels.find(l =>
+      (l.innerText || '').toLowerCase().includes(textoLabel.toLowerCase())
+    );
+
+    if (!label) return null;
+
+    const container = label.parentElement;
+    if (!container) return null;
+
+    return container.querySelector('input, select, textarea');
+  }
+
+  function getCampos() {
+    return {
+      nome: document.getElementById('nomePrato') || campoPorLabel('Nome do prato'),
+      grupo: document.getElementById('grupoPrato') || campoPorLabel('Grupo'),
+      item: document.getElementById('itemProteina') || campoPorLabel('Item/proteína'),
+      kg: document.getElementById('kgPrato') || campoPorLabel('Quantidade por prato'),
+      preco: document.getElementById('precoVenda') || campoPorLabel('Preço de venda'),
+      custo: document.getElementById('custoPrato') || campoPorLabel('Custo do prato')
+    };
+  }
+
   async function carregarPratos() {
     const supabase = SupabaseManager.getSupabaseClient();
     const restauranteId = SupabaseManager.getRestauranteId();
@@ -46,12 +72,14 @@ const PratosManager = (() => {
       return;
     }
 
-    const nome = document.getElementById('nomePrato')?.value?.trim();
-    const grupo = document.getElementById('grupoPrato')?.value || '';
-    const item = document.getElementById('itemProteina')?.value?.trim();
-    const kg = num(document.getElementById('kgPrato')?.value);
-    const preco = num(document.getElementById('precoVenda')?.value);
-    const custo = num(document.getElementById('custoPrato')?.value);
+    const campos = getCampos();
+
+    const nome = campos.nome?.value?.trim();
+    const grupo = campos.grupo?.value || 'Alimentos';
+    const item = campos.item?.value?.trim();
+    const kg = num(campos.kg?.value);
+    const preco = num(campos.preco?.value);
+    const custo = num(campos.custo?.value);
 
     if (!nome) {
       alert('Informe o nome do prato.');
@@ -88,7 +116,11 @@ const PratosManager = (() => {
   }
 
   function renderizarPratos() {
-    const tbody = document.getElementById('tabelaPratos');
+    const tbody =
+      document.getElementById('tabelaPratos') ||
+      document.querySelector('#pratos table tbody') ||
+      document.querySelector('tbody');
+
     if (!tbody) return;
 
     tbody.innerHTML = pratos.map(p => {
@@ -124,12 +156,14 @@ const PratosManager = (() => {
 
     editandoId = id;
 
-    document.getElementById('nomePrato').value = p.nome_prato || '';
-    document.getElementById('grupoPrato').value = p.grupo || '';
-    document.getElementById('itemProteina').value = p.item || '';
-    document.getElementById('kgPrato').value = p.kg_por_prato || '';
-    document.getElementById('precoVenda').value = p.preco_venda || '';
-    document.getElementById('custoPrato').value = p.custo || '';
+    const campos = getCampos();
+
+    if (campos.nome) campos.nome.value = p.nome_prato || '';
+    if (campos.grupo) campos.grupo.value = p.grupo || 'Alimentos';
+    if (campos.item) campos.item.value = p.item || '';
+    if (campos.kg) campos.kg.value = p.kg_por_prato || '';
+    if (campos.preco) campos.preco.value = p.preco_venda || '';
+    if (campos.custo) campos.custo.value = p.custo || '';
 
     const btn = document.getElementById('btnSalvarPrato');
     if (btn) btn.textContent = 'Atualizar prato';
@@ -157,13 +191,14 @@ const PratosManager = (() => {
   function limparFormulario() {
     editandoId = null;
 
-    ['nomePrato', 'itemProteina', 'kgPrato', 'precoVenda', 'custoPrato'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) el.value = '';
-    });
+    const campos = getCampos();
 
-    const grupo = document.getElementById('grupoPrato');
-    if (grupo) grupo.value = 'Alimentos';
+    if (campos.nome) campos.nome.value = '';
+    if (campos.item) campos.item.value = '';
+    if (campos.kg) campos.kg.value = '';
+    if (campos.preco) campos.preco.value = '';
+    if (campos.custo) campos.custo.value = '';
+    if (campos.grupo) campos.grupo.value = 'Alimentos';
 
     const btn = document.getElementById('btnSalvarPrato');
     if (btn) btn.textContent = 'Salvar prato';
