@@ -1,167 +1,191 @@
-let pratos = [];
-let editando = null;
+const PratosManager = {
+  pratos: [],
+  editandoId: null,
 
-function getPratos() { return pratos; }
-function numero(v) { return parseFloat(String(v || 0).replace(',', '.')) || 0; }
-function moeda(v) { return UIManager?.BRL ? UIManager.BRL(v) : `R$ ${Number(v || 0).toFixed(2)}`; }
+  async carregarPratos() {
+    try {
+      const restauranteId = SupabaseManager.getRestauranteId();
 
-async function carregarPratos() {
-  const supabase = SupabaseManager.getSupabaseClient();
-  const restauranteId = SupabaseManager.getRestauranteId();
-  if (!supabase || !restauranteId) return;
+      const { data, error } = await SupabaseManager.client
+        .from('pratos')
+        .select('*')
+        .eq('restaurante_id', restauranteId)
+        .eq('ativo', true)
+        .order('created_at', { ascending: false });
 
-  const { data, error } = await supabase
-    .from('pratos')
-    .select('*')
-    .eq('restaurante_id', restauranteId)
-    .order('id', { ascending: true });
+      if (error) throw error;
 
-  if (error) { console.error(error); return; }
+      this.pratos = data || [];
+      this.renderizarTabela();
 
-  pratos = data || [];
-  renderizarTabela();
-}
+    } catch (err) {
+      console.error('Erro ao carregar pratos:', err);
+    }
+  },
 
-function renderizarTabela() {
-  const tabela = document.getElementById('pratosTableBody') || document.querySelector('#pratos tbody');
-  if (!tabela) return;
+  renderizarTabela() {
+    const tbody = document.getElementById('tabelaPratos');
 
-  tabela.innerHTML = pratos.map((p, i) => {
-    const nome = p.nome_prato || p.nome || '';
-    const item = p.item_proteina || p.item || '';
-    const kg = p.kg_por_prato ?? p.kg ?? 0;
-    const preco = numero(p.preco_venda ?? p.preco);
-    const custo = numero(p.custo_prato ?? p.custo);
-    const cmv = preco ? (custo / preco) * 100 : 0;
-    const margem = preco ? ((preco - custo) / preco) * 100 : 0;
+    if (!tbody) return;
 
-    return `
-      <tr>
-        <td>${nome}</td>
-        <td>${p.grupo || ''}</td>
-        <td>${item}</td>
-        <td>${Number(kg).toFixed(3)}</td>
-        <td>${moeda(preco)}</td>
-        <td>${moeda(custo)}</td>
-        <td>${cmv.toFixed(1)}%</td>
-        <td>${margem.toFixed(1)}%</td>
-        <td>
-          <button class="btn-edit" onclick="PratosManager.editarPrato(${i})">Editar</button>
-          <button class="btn-red" onclick="PratosManager.excluirPrato(${i})">Excluir</button>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+    tbody.innerHTML = '';
 
-async function salvarPrato() {
-  const supabase = SupabaseManager.getSupabaseClient();
-  const restauranteId = SupabaseManager.getRestauranteId();
+    this.pratos.forEach(prato => {
+      const preco = Number(prato.preco_venda || 0);
+      const custo = Number(prato.custo || prato.custo_prato || 0);
 
-  if (!supabase || !restauranteId) {
-    alert('Faça login novamente. Restaurante não identificado.');
-    return;
+      const cmv = preco > 0
+        ? ((custo / preco) * 100).toFixed(1)
+        : 0;
+
+      const margem = (100 - cmv).toFixed(1);
+
+      tbody.innerHTML += `
+        <tr>
+          <td>${prato.nome_prato || '-'}</td>
+          <td>${prato.grupo || '-'}</td>
+          <td>${prato.item || prato.item_proteina || '-'}</td>
+          <td>${Number(prato.kg_por_prato || 0).toFixed(3)}</td>
+          <td>R$ ${preco.toFixed(2)}</td>
+          <td>R$ ${custo.toFixed(2)}</td>
+          <td>${cmv}%</td>
+          <td>${margem}%</td>
+          <td>
+            <button onclick="PratosManager.editarPrato(${prato.id})">
+              Editar
+            </button>
+
+            <button onclick="PratosManager.excluirPrato(${prato.id})">
+              Excluir
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+  },
+
+  async salvarPrato() {
+    try {
+      const restauranteId = SupabaseManager.getRestauranteId();
+
+      const nome = document.getElementById('nomePrato').value;
+      const grupo = document.getElementById('grupoPrato').value;
+      const item = document.getElementById('itemProteina').value;
+      const kg = parseFloat(
+        document.getElementById('kgPrato').value.replace(',', '.')
+      );
+
+      const preco = parseFloat(
+        document.getElementById('precoVenda').value.replace(',', '.')
+      );
+
+      const custo = parseFloat(
+        document.getElementById('custoPrato').value.replace(',', '.')
+      );
+
+      const payload = {
+        restaurante_id: restauranteId,
+        nome_prato: nome,
+        grupo: grupo,
+        item: item,
+        kg_por_prato: kg,
+        preco_venda: preco,
+        custo: custo,
+        ativo: true
+      };
+
+      let response;
+
+      if (this.editandoId) {
+        response = await SupabaseManager.client
+          .from('pratos')
+          .update(payload)
+          .eq('id', this.editandoId);
+
+      } else {
+        response = await SupabaseManager.client
+          .from('pratos')
+          .insert([payload]);
+      }
+
+      if (response.error) throw response.error;
+
+      this.limparFormulario();
+
+      await this.carregarPratos();
+
+      if (window.VendasManager?.atualizarSelectPratos) {
+        await window.VendasManager.atualizarSelectPratos();
+      }
+
+    } catch (err) {
+      console.error('Erro ao salvar prato:', err);
+      alert('Erro ao salvar prato');
+    }
+  },
+
+  editarPrato(id) {
+    const prato = this.pratos.find(p => p.id === id);
+
+    if (!prato) return;
+
+    this.editandoId = id;
+
+    document.getElementById('nomePrato').value =
+      prato.nome_prato || '';
+
+    document.getElementById('grupoPrato').value =
+      prato.grupo || '';
+
+    document.getElementById('itemProteina').value =
+      prato.item || '';
+
+    document.getElementById('kgPrato').value =
+      prato.kg_por_prato || '';
+
+    document.getElementById('precoVenda').value =
+      prato.preco_venda || '';
+
+    document.getElementById('custoPrato').value =
+      prato.custo || '';
+  },
+
+  async excluirPrato(id) {
+    const confirmar = confirm(
+      'Deseja ocultar este prato?'
+    );
+
+    if (!confirmar) return;
+
+    try {
+      const { error } = await SupabaseManager.client
+        .from('pratos')
+        .update({ ativo: false })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await this.carregarPratos();
+
+      if (window.VendasManager?.atualizarSelectPratos) {
+        await window.VendasManager.atualizarSelectPratos();
+      }
+
+    } catch (err) {
+      console.error('Erro ao excluir prato:', err);
+    }
+  },
+
+  limparFormulario() {
+    this.editandoId = null;
+
+    document.getElementById('nomePrato').value = '';
+    document.getElementById('grupoPrato').value = 'Alimentos';
+    document.getElementById('itemProteina').value = '';
+    document.getElementById('kgPrato').value = '';
+    document.getElementById('precoVenda').value = '';
+    document.getElementById('custoPrato').value = '';
   }
-
-  const payload = {
-    restaurante_id: restauranteId,
-    nome_prato: pratoNome.value.trim(),
-    grupo: pratoGrupo.value,
-    item_proteina: pratoItem.value.trim(),
-    kg_por_prato: numero(pratoKg.value),
-    preco_venda: numero(pratoPreco.value),
-    custo_prato: numero(pratoCusto.value)
-  };
-
-  if (!payload.nome_prato || !payload.item_proteina || !payload.kg_por_prato || !payload.preco_venda) {
-    alert('Preencha nome, item/proteína, kg por prato e preço.');
-    return;
-  }
-
-  const res = editando !== null && pratos[editando]?.id
-    ? await supabase.from('pratos').update(payload).eq('id', pratos[editando].id)
-    : await supabase.from('pratos').insert(payload);
-
-  if (res.error) {
-    console.error(res.error);
-    alert('Erro ao salvar prato: ' + res.error.message);
-    return;
-  }
-
-  cancelarEdicaoPrato();
-  await carregarPratos();
-
-  if (window.VendasManager?.atualizarSelectPratos) {
-    window.VendasManager.atualizarSelectPratos();
-  }
-
-  if (window.DashboardManager?.renderizarDashboard) {
-    window.DashboardManager.renderizarDashboard();
-  }
-}
-
-function editarPrato(index) {
-  editando = index;
-  const p = pratos[index];
-
-  pratoNome.value = p.nome_prato || p.nome || '';
-  pratoGrupo.value = p.grupo || '';
-  pratoItem.value = p.item_proteina || p.item || '';
-  pratoKg.value = p.kg_por_prato ?? p.kg ?? '';
-  pratoPreco.value = p.preco_venda ?? p.preco ?? '';
-  pratoCusto.value = p.custo_prato ?? p.custo ?? '';
-
-  const btn = document.getElementById('btnSalvarPrato');
-  if (btn) btn.textContent = 'Atualizar prato';
-}
-
-function cancelarEdicaoPrato() {
-  editando = null;
-  pratoNome.value = '';
-  pratoItem.value = '';
-  pratoKg.value = '';
-  pratoPreco.value = '';
-  pratoCusto.value = '';
-
-  const btn = document.getElementById('btnSalvarPrato');
-  if (btn) btn.textContent = 'Salvar prato';
-}
-
-async function excluirPrato(index) {
-  if (!confirm('Excluir prato?')) return;
-
-  const supabase = SupabaseManager.getSupabaseClient();
-  const p = pratos[index];
-  if (!supabase || !p?.id) return;
-
-  const { error } = await supabase.from('pratos').delete().eq('id', p.id);
-  if (error) {
-    console.error(error);
-    alert('Erro ao excluir prato.');
-    return;
-  }
-
-  await carregarPratos();
-
-  if (window.VendasManager?.atualizarSelectPratos) {
-    window.VendasManager.atualizarSelectPratos();
-  }
-}
-
-function limparDados() {
-  pratos = [];
-  editando = null;
-  renderizarTabela();
-}
-
-window.PratosManager = {
-  getPratos,
-  carregarPratos,
-  salvarPrato,
-  editar: editarPrato,
-  editarPrato,
-  excluir: excluirPrato,
-  excluirPrato,
-  renderizarPratos: renderizarTabela,
-  limparDados
 };
+
+window.PratosManager = PratosManager;
