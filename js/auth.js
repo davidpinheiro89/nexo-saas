@@ -1,10 +1,9 @@
 const AuthManager = (() => {
   async function verificarSessao() {
     const supabase = SupabaseManager.getSupabaseClient();
+    const { data } = await supabase.auth.getSession();
 
-    const { data, error } = await supabase.auth.getSession();
-
-    if (error || !data.session) {
+    if (!data.session) {
       mostrarLogin();
       return;
     }
@@ -13,34 +12,28 @@ const AuthManager = (() => {
   }
 
   async function fazerLogin() {
-    try {
-      const email = document.getElementById('loginUser')?.value?.trim();
-      const senha = document.getElementById('loginPass')?.value?.trim();
+    const email = document.getElementById('loginUser')?.value?.trim();
+    const senha = document.getElementById('loginPass')?.value?.trim();
 
-      if (!email || !senha) {
-        alert('Informe e-mail e senha.');
-        return;
-      }
-
-      const supabase = SupabaseManager.getSupabaseClient();
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password: senha
-      });
-
-      if (error) {
-        console.error('Erro login:', error);
-        alert('E-mail ou senha inválidos.');
-        return;
-      }
-
-      await carregarUsuario(data.user);
-
-    } catch (err) {
-      console.error('Erro inesperado no login:', err);
-      alert('Erro ao fazer login.');
+    if (!email || !senha) {
+      alert('Informe e-mail e senha.');
+      return;
     }
+
+    const supabase = SupabaseManager.getSupabaseClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password: senha
+    });
+
+    if (error) {
+      console.error(error);
+      alert('E-mail ou senha inválidos.');
+      return;
+    }
+
+    await carregarUsuario(data.user);
   }
 
   async function carregarUsuario(user) {
@@ -52,26 +45,17 @@ const AuthManager = (() => {
       .eq('auth_id', user.id)
       .maybeSingle();
 
-    if (error) {
-      console.error('Erro ao buscar usuário:', error);
-      alert('Erro ao carregar usuário.');
-      mostrarLogin();
-      return;
-    }
-
-    if (!data) {
+    if (error || !data) {
+      console.error(error);
       alert('Usuário sem restaurante vinculado.');
       mostrarLogin();
       return;
     }
 
-    const restauranteId =
-      data.restaurante_i ||
-      data.restaurante_id ||
-      data.restaurante;
+    const restauranteId = data.restaurante_i || data.restaurante_id;
 
     if (!restauranteId) {
-      alert('Usuário sem restaurante_id configurado.');
+      alert('Restaurante não configurado para este usuário.');
       mostrarLogin();
       return;
     }
@@ -81,7 +65,7 @@ const AuthManager = (() => {
 
     if (window.UIManager?.atualizarInfoCliente) {
       UIManager.atualizarInfoCliente({
-        restaurante: data.restaurante || 'Restaurante',
+        restaurante: data.restaurante || 'Restaurante Cliente',
         usuario: data.usuario || data.nome || user.email
       });
     }
@@ -94,54 +78,45 @@ const AuthManager = (() => {
   }
 
   async function logout() {
-    try {
-      const supabase = SupabaseManager.getSupabaseClient();
+    const supabase = SupabaseManager.getSupabaseClient();
 
-      await supabase.auth.signOut();
+    await supabase.auth.signOut();
 
-      SupabaseManager.setUsuarioLogado(null);
-      SupabaseManager.setRestauranteId(null);
+    SupabaseManager.setUsuarioLogado(null);
+    SupabaseManager.setRestauranteId(null);
 
-      if (window.DataManager?.limparTodosDados) {
-        DataManager.limparTodosDados();
-      }
-
-      mostrarLogin();
-
-    } catch (err) {
-      console.error('Erro no logout:', err);
-      alert('Erro ao sair.');
+    if (window.DataManager?.limparTodosDados) {
+      DataManager.limparTodosDados();
     }
+
+    mostrarLogin();
   }
 
   function mostrarLogin() {
-    const login = document.getElementById('loginScreen');
-    if (login) login.style.display = 'flex';
+    const el = document.getElementById('loginScreen');
+    if (el) el.style.display = 'flex';
   }
 
   function esconderLogin() {
-    const login = document.getElementById('loginScreen');
-    if (login) login.style.display = 'none';
+    const el = document.getElementById('loginScreen');
+    if (el) el.style.display = 'none';
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     verificarSessao();
 
     const btnLogout = document.getElementById('btnLogout');
-    if (btnLogout) {
-      btnLogout.onclick = logout;
-    }
+    if (btnLogout) btnLogout.onclick = logout;
   });
 
   return {
-    fazerLogin,
     verificarSessao,
+    fazerLogin,
     logout
   };
 })();
 
 window.AuthManager = AuthManager;
-
-// Compatibilidade com HTML antigo
 window.fazerLogin = AuthManager.fazerLogin;
 window.logout = AuthManager.logout;
+window.sair = AuthManager.logout;

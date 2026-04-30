@@ -30,7 +30,6 @@ const PratosManager = (() => {
     }
 
     pratos = data || [];
-
     renderizarPratos();
 
     if (window.VendasManager?.atualizarSelectPratos) {
@@ -158,8 +157,7 @@ const PratosManager = (() => {
   function limparFormulario() {
     editandoId = null;
 
-    const campos = ['nomePrato', 'itemProteina', 'kgPrato', 'precoVenda', 'custoPrato'];
-    campos.forEach(id => {
+    ['nomePrato', 'itemProteina', 'kgPrato', 'precoVenda', 'custoPrato'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -190,6 +188,5 @@ const PratosManager = (() => {
 })();
 
 window.PratosManager = PratosManager;
-
 window.salvarPrato = PratosManager.salvarPrato;
 window.cancelarEdicao = PratosManager.limparFormulario;

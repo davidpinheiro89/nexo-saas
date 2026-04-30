@@ -43,7 +43,7 @@ const VendasManager = (() => {
     select.innerHTML =
       '<option value="">Selecione um prato</option>' +
       pratos.map(p => `
-        <option value="${p.id}">
+        <option value="${p.nome_prato}">
           ${p.nome_prato}
         </option>
       `).join('');
@@ -58,14 +58,14 @@ const VendasManager = (() => {
       return;
     }
 
-    const pratoId = document.getElementById('vendaPrato')?.value;
+    const pratoNome = document.getElementById('vendaPrato')?.value;
     const quantidade = num(document.getElementById('vendaQuantidade')?.value);
     const modo = document.getElementById('vendaModo')?.value || 'diario';
     const dataInicio = document.getElementById('vendaDataInicio')?.value;
     const dataFimCampo = document.getElementById('vendaDataFim')?.value;
     const dataFim = modo === 'consolidado' ? (dataFimCampo || dataInicio) : dataInicio;
 
-    if (!pratoId) {
+    if (!pratoNome) {
       alert('Selecione um prato.');
       return;
     }
@@ -81,7 +81,7 @@ const VendasManager = (() => {
     }
 
     const pratos = PratosManager.getPratos();
-    const prato = pratos.find(p => String(p.id) === String(pratoId));
+    const prato = pratos.find(p => p.nome_prato === pratoNome);
 
     if (!prato) {
       alert('Prato não encontrado. Recarregue a página.');
@@ -92,7 +92,6 @@ const VendasManager = (() => {
 
     const payload = {
       restaurante_id: restauranteId,
-      prato_id: prato.id,
       prato: prato.nome_prato,
       quantidade,
       modo,
@@ -148,7 +147,7 @@ const VendasManager = (() => {
     editandoId = id;
 
     const select = document.getElementById('vendaPrato');
-    if (select) select.value = v.prato_id || '';
+    if (select) select.value = v.prato || '';
 
     document.getElementById('vendaQuantidade').value = v.quantidade || '';
     document.getElementById('vendaModo').value = v.modo || 'diario';
@@ -162,8 +161,7 @@ const VendasManager = (() => {
   function cancelarEdicao() {
     editandoId = null;
 
-    const campos = ['vendaPrato', 'vendaQuantidade', 'vendaDataInicio', 'vendaDataFim'];
-    campos.forEach(id => {
+    ['vendaPrato', 'vendaQuantidade', 'vendaDataInicio', 'vendaDataFim'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = '';
     });
@@ -218,5 +216,4 @@ const VendasManager = (() => {
 })();
 
 window.VendasManager = VendasManager;
-
 window.salvarVenda = VendasManager.salvarVenda;
